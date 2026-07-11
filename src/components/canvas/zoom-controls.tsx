@@ -5,8 +5,9 @@ import type { PointerEvent } from "react"
 import { useStore } from "@/store"
 import { IconButton } from "@/components/ui/icon-button"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
-import { ZoomIn, ZoomOut, RotateCcw, Maximize2 } from "lucide-react"
+import { ZoomIn, ZoomOut, RotateCcw, Maximize2, Paintbrush } from "lucide-react"
 import { AddWidgetButton } from "./add-widget-button"
+import { BackgroundPicker } from "./background-picker"
 
 function stopPropagation(e: PointerEvent) {
   e.stopPropagation()
@@ -28,6 +29,8 @@ function zoomAtCenter(factor: number) {
 export const ZoomControls = memo(function ZoomControls() {
   const canvasState = useStore((s) => s.canvasState)
   const setCanvasState = useStore((s) => s.setCanvasState)
+  const canvasBackground = useStore((s) => s.canvasBackground)
+  const setCanvasBackground = useStore((s) => s.setCanvasBackground)
 
   const zoomPercent = Math.round(canvasState.scale * 100)
 
@@ -114,6 +117,16 @@ export const ZoomControls = memo(function ZoomControls() {
       </IconButton>
 
       <div className="h-px bg-border mx-1" />
+
+      <BackgroundPicker
+        value={canvasBackground}
+        onChange={setCanvasBackground}
+        trigger={
+          <IconButton label="Canvas background" size="md">
+            <Paintbrush className="h-4 w-4" />
+          </IconButton>
+        }
+      />
 
       <AddWidgetButton />
     </div>

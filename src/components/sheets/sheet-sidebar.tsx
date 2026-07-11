@@ -15,6 +15,10 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { IconButton } from "@/components/ui/icon-button";
+import { BackgroundPicker } from "@/components/canvas/background-picker";
+import { useTheme } from "@/components/theme-provider";
+import { resolveBackgroundColor } from "@/lib/backgrounds";
+import type { CanvasBackground } from "@/types";
 import {
   Plus,
   Pencil,
@@ -23,11 +27,13 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
+  Paintbrush,
 } from "lucide-react";
 
 type Sheet = {
   id: string;
   title: string;
+  background?: Partial<CanvasBackground>;
 };
 
 interface SheetTabItemProps {
@@ -37,9 +43,12 @@ interface SheetTabItemProps {
   isDragging: boolean;
   isDropTarget: boolean;
   dropPosition: "before" | "after" | null;
+  globalBackground: CanvasBackground;
   onStartRename: (id: string, title: string) => void;
   onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
+  onSetSheetBackground: (id: string, background: Partial<CanvasBackground>) => void;
+  onResetSheetBackground: (id: string) => void;
   onPointerDown: (e: React.PointerEvent, sheetId: string) => void;
   inputRef: RefObject<HTMLInputElement | null>;
   editValue: string;
@@ -52,9 +61,12 @@ const SheetTabItem = memo(function SheetTabItem({
   sheet,
   isActive,
   isEditing,
+  globalBackground,
   onStartRename,
   onDuplicate,
   onDelete,
+  onSetSheetBackground,
+  onResetSheetBackground,
   onPointerDown,
   inputRef,
   editValue,
@@ -65,6 +77,12 @@ const SheetTabItem = memo(function SheetTabItem({
   isDropTarget,
   dropPosition,
 }: SheetTabItemProps) {
+  const { resolvedTheme } = useTheme();
+  const hasOverride = !!sheet.background;
+  const effectiveBackground: CanvasBackground = {
+    ...globalBackground,
+    ...sheet.background,
+  };
   const [actionsOpen, setActionsOpen] = useState(false);
   const [menuPlacement, setMenuPlacement] = useState<"bottom" | "top">(
     "bottom",
@@ -77,10 +95,13 @@ const SheetTabItem = memo(function SheetTabItem({
     if (!actionsOpen) return;
 
     const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      const insidePicker = (target as Element).closest?.("[data-background-picker]");
       if (
         actionsRef.current &&
-        !actionsRef.current.contains(e.target as Node) &&
-        !menuRef.current?.contains(e.target as Node)
+        !actionsRef.current.contains(target) &&
+        !menuRef.current?.contains(target) &&
+        !insidePicker
       ) {
         setActionsOpen(false);
       }
@@ -177,7 +198,21 @@ const SheetTabItem = memo(function SheetTabItem({
           onClick={(e) => e.stopPropagation()}
         />
       ) : (
-        <span className="truncate max-w-28 text-sm">{sheet.title}</span>
+        <span className="flex items-center gap-1.5 min-w-0">
+          {hasOverride && (
+            <span
+              className="size-2 shrink-0 rounded-full border border-border/50"
+              style={{
+                backgroundColor: resolveBackgroundColor(
+                  effectiveBackground.color,
+                  resolvedTheme === "dark",
+                ),
+              }}
+              aria-hidden="true"
+            />
+          )}
+          <span className="truncate max-w-28 text-sm">{sheet.title}</span>
+        </span>
       )}
 
       {!isEditing && (
@@ -233,6 +268,24 @@ const SheetTabItem = memo(function SheetTabItem({
                   <Copy className="size-3.5" />
                   Duplicate
                 </button>
+                <div onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+                  <BackgroundPicker
+                    value={effectiveBackground}
+                    onChange={(partial) => onSetSheetBackground(sheet.id, partial)}
+                    onReset={hasOverride ? () => onResetSheetBackground(sheet.id) : undefined}
+                    side="right"
+                    align="start"
+                    trigger={
+                      <button
+                        role="menuitem"
+                        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                      >
+                        <Paintbrush className="size-3.5" />
+                        Background
+                      </button>
+                    }
+                  />
+                </div>
                 <div className="h-px bg-border my-1" />
                 <button
                   role="menuitem"
@@ -265,6 +318,8 @@ export const SheetSidebar = memo(function SheetSidebar() {
   const updateSheet = useStore((s) => s.updateSheet);
   const duplicateSheet = useStore((s) => s.duplicateSheet);
   const reorderSheets = useStore((s) => s.reorderSheets);
+  const canvasBackground = useStore((s) => s.canvasBackground);
+  const setSheetBackground = useStore((s) => s.setSheetBackground);
 
   const { addToast } = useToast();
   const confirm = useConfirm();
@@ -375,6 +430,20 @@ export const SheetSidebar = memo(function SheetSidebar() {
       addToast({ title: "Sheet duplicated", variant: "success" });
     },
     [duplicateSheet, addToast],
+  );
+
+  const handleSetSheetBackground = useCallback(
+    (id: string, background: Parameters<typeof setSheetBackground>[1]) => {
+      setSheetBackground(id, background);
+    },
+    [setSheetBackground],
+  );
+
+  const handleResetSheetBackground = useCallback(
+    (id: string) => {
+      setSheetBackground(id, null);
+    },
+    [setSheetBackground],
   );
 
   const clearDragState = useCallback(() => {
@@ -504,9 +573,12 @@ export const SheetSidebar = memo(function SheetSidebar() {
               isDragging={draggingSheetId === sheet.id}
               isDropTarget={dropTarget?.id === sheet.id}
               dropPosition={dropTarget?.id === sheet.id ? dropTarget.position : null}
+              globalBackground={canvasBackground}
               onStartRename={handleStartRename}
               onDuplicate={handleDuplicate}
               onDelete={handleDelete}
+              onSetSheetBackground={handleSetSheetBackground}
+              onResetSheetBackground={handleResetSheetBackground}
               onPointerDown={handleTabPointerDown}
               inputRef={inputRef}
               editValue={editValue}
