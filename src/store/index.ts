@@ -2,6 +2,10 @@ import { create } from "zustand"
 import { persist, createJSONStorage } from "zustand/middleware"
 import { WidgetType, type Sheet, type Widget, type CanvasState, type ThemeSettings } from "@/types"
 import { diffForHistory, applyHistoryEntry, isValidHistoryEntry, type HistoryEntry, type HistoryTrio } from "@/lib/history-diff"
+import { quantize } from "@/lib/geometry"
+
+const MIN_WIDTH = 120
+const MIN_HEIGHT = 80
 
 interface ClipboardData {
   widgets: (Pick<Widget, "type" | "title" | "width" | "height" | "data" | "collapsed"> & { x: number; y: number })[]
@@ -131,6 +135,25 @@ export function migratePersistedState(persisted: unknown, version: number): unkn
       canvasState.snapToObjects = true
     }
   }
+  if (version < 5) {
+    // v4 blobs may carry off-grid widget geometry from free-form
+    // positioning; the grid is now a hard constraint, so quantize every
+    // widget's x/y/width/height. Also drop the removed snapToGrid toggle.
+    const widgets = state.widgets as Record<string, Widget> | undefined
+    const canvasState = state.canvasState as (Partial<CanvasState> & { snapToGrid?: boolean }) | undefined
+    const gridSize = canvasState?.gridSize ?? 20
+    if (widgets) {
+      for (const widget of Object.values(widgets)) {
+        widget.x = quantize(widget.x, gridSize)
+        widget.y = quantize(widget.y, gridSize)
+        widget.width = Math.max(MIN_WIDTH, quantize(widget.width, gridSize))
+        widget.height = Math.max(MIN_HEIGHT, quantize(widget.height, gridSize))
+      }
+    }
+    if (canvasState) {
+      delete canvasState.snapToGrid
+    }
+  }
   return state
 }
 
@@ -161,7 +184,6 @@ const defaultCanvasState: CanvasState = {
   offsetY: 0,
   scale: 1,
   gridEnabled: true,
-  snapToGrid: true,
   gridSize: 20,
   snapToObjects: true,
 }
@@ -195,8 +217,8 @@ function initializeDefaultState() {
         id: noteId,
         type: WidgetType.Note,
         title: "Welcome!",
-        x: 150,
-        y: 150,
+        x: 160,
+        y: 160,
         width: 320,
         height: 280,
         zIndex: 1,
@@ -209,8 +231,8 @@ function initializeDefaultState() {
         id: todoId,
         type: WidgetType.Todo,
         title: "Getting Started",
-        x: 530,
-        y: 150,
+        x: 540,
+        y: 160,
         width: 300,
         height: 280,
         zIndex: 2,
@@ -227,8 +249,8 @@ function initializeDefaultState() {
         id: quickLinkId,
         type: WidgetType.QuickLink,
         title: "Quick Links",
-        x: 150,
-        y: 490,
+        x: 160,
+        y: 500,
         width: 280,
         height: 180,
         zIndex: 3,
@@ -593,9 +615,10 @@ export const useStore = create<StoreState>()(
         set((state) => {
           const widget = state.widgets[id]
           if (!widget) return state
+          const grid = state.canvasState.gridSize
           const widgets = {
             ...state.widgets,
-            [id]: { ...widget, x, y },
+            [id]: { ...widget, x: quantize(x, grid), y: quantize(y, grid) },
           }
           if (!pendingSnapshot) {
             return { widgets }
@@ -609,11 +632,12 @@ export const useStore = create<StoreState>()(
 
       moveWidgets: (moves) => {
         set((state) => {
+          const grid = state.canvasState.gridSize
           const widgets = { ...state.widgets }
           for (const { id, x, y } of moves) {
             const widget = widgets[id]
             if (!widget) continue
-            widgets[id] = { ...widget, x, y }
+            widgets[id] = { ...widget, x: quantize(x, grid), y: quantize(y, grid) }
           }
           if (!pendingSnapshot) {
             return { widgets }
@@ -629,9 +653,12 @@ export const useStore = create<StoreState>()(
         set((state) => {
           const widget = state.widgets[id]
           if (!widget) return state
+          const grid = state.canvasState.gridSize
+          const newWidth = Math.max(MIN_WIDTH, quantize(width, grid))
+          const newHeight = Math.max(MIN_HEIGHT, quantize(height, grid))
           const widgets = {
             ...state.widgets,
-            [id]: { ...widget, width, height },
+            [id]: { ...widget, width: newWidth, height: newHeight },
           }
           if (!pendingSnapshot) {
             return { widgets }
@@ -652,6 +679,7 @@ export const useStore = create<StoreState>()(
             ...Object.values(state.widgets).map((w) => w.zIndex),
             0
           )
+          const grid = state.canvasState.gridSize
           const newWidgets: Record<string, Widget> = {}
           const newIds: string[] = []
           widgetIds.forEach((id, index) => {
@@ -660,8 +688,8 @@ export const useStore = create<StoreState>()(
             const duplicate: Widget = {
               ...original,
               id: crypto.randomUUID(),
-              x: original.x + 24 + index * 8,
-              y: original.y + 24 + index * 8,
+              x: original.x + grid + index * grid,
+              y: original.y + grid + index * grid,
               zIndex: maxZ + 1 + index,
               title: `${original.title} (copy)`,
             }
@@ -738,11 +766,12 @@ export const useStore = create<StoreState>()(
             ...Object.values(state.widgets).map((w) => w.zIndex),
             0
           )
+          const grid = state.canvasState.gridSize
           const duplicate: Widget = {
             ...original,
             id: crypto.randomUUID(),
-            x: original.x + 24,
-            y: original.y + 24,
+            x: original.x + grid,
+            y: original.y + grid,
             zIndex: maxZ + 1,
             title: `${original.title} (copy)`,
           }
@@ -874,17 +903,18 @@ export const useStore = create<StoreState>()(
             ...Object.values(state.widgets).map((w) => w.zIndex),
             0
           )
-          const offset = 24
+          const grid = state.canvasState.gridSize
           const newWidgets: Record<string, Widget> = {}
           const newIds: string[] = []
           state.clipboard.widgets.forEach((data, index) => {
             const id = crypto.randomUUID()
+            const offset = grid * (1 + index)
             newWidgets[id] = {
               id,
               type: data.type,
               title: data.title,
-              x: data.x - state.clipboard!.minX + offset + index * 4,
-              y: data.y - state.clipboard!.minY + offset + index * 4,
+              x: data.x - state.clipboard!.minX + offset,
+              y: data.y - state.clipboard!.minY + offset,
               width: data.width,
               height: data.height,
               zIndex: maxZ + 1 + index,
@@ -951,7 +981,7 @@ export const useStore = create<StoreState>()(
     {
       name: "mind-space-store",
       storage: createJSONStorage(() => debouncedStorage),
-      version: 4,
+      version: 5,
       migrate: migratePersistedState,
       partialize: (state) => ({
         sheets: state.sheets,

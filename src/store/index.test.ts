@@ -128,26 +128,26 @@ describe("updateWidgets", () => {
 })
 
 describe("moveWidget", () => {
-  it("changes x/y and does not push an undo snapshot", () => {
+  it("quantizes x/y to the grid and does not push an undo snapshot", () => {
     useStore.getState().moveWidget("w1", 10, 20)
     const state = useStore.getState()
-    expect(state.widgets.w1.x).toBe(10)
+    expect(state.widgets.w1.x).toBe(20)
     expect(state.widgets.w1.y).toBe(20)
     expect(state.undoStack).toHaveLength(0)
   })
 })
 
 describe("moveWidgets", () => {
-  it("changes x/y and does not push an undo snapshot", () => {
+  it("quantizes x/y to the grid and does not push an undo snapshot", () => {
     useStore.setState({ widgets: { w1: makeWidget("w1"), w2: makeWidget("w2") } })
     useStore.getState().moveWidgets([
       { id: "w1", x: 10, y: 20 },
       { id: "w2", x: 30, y: 40 },
     ])
     const state = useStore.getState()
-    expect(state.widgets.w1.x).toBe(10)
+    expect(state.widgets.w1.x).toBe(20)
     expect(state.widgets.w1.y).toBe(20)
-    expect(state.widgets.w2.x).toBe(30)
+    expect(state.widgets.w2.x).toBe(40)
     expect(state.widgets.w2.y).toBe(40)
     expect(state.undoStack).toHaveLength(0)
   })
@@ -173,7 +173,7 @@ describe("moveWidgets", () => {
 
     const state = useStore.getState()
     expect(state.widgets.w1.x).toBe(40)
-    expect(state.widgets.w2.x).toBe(45)
+    expect(state.widgets.w2.x).toBe(40)
     expect(state.undoStack).toHaveLength(1)
 
     useStore.getState().undo()
@@ -186,12 +186,19 @@ describe("moveWidgets", () => {
 })
 
 describe("resizeWidget", () => {
-  it("changes width/height and does not push an undo snapshot", () => {
+  it("quantizes width/height to the grid and does not push an undo snapshot", () => {
     useStore.getState().resizeWidget("w1", 200, 300)
     const state = useStore.getState()
     expect(state.widgets.w1.width).toBe(200)
     expect(state.widgets.w1.height).toBe(300)
     expect(state.undoStack).toHaveLength(0)
+  })
+
+  it("clamps to MIN_WIDTH/MIN_HEIGHT after quantizing", () => {
+    useStore.getState().resizeWidget("w1", 15, 30)
+    const state = useStore.getState()
+    expect(state.widgets.w1.width).toBe(120)
+    expect(state.widgets.w1.height).toBe(80)
   })
 })
 
@@ -233,7 +240,7 @@ describe("history cap", () => {
 })
 
 describe("copyWidgets / pasteWidgets", () => {
-  it("creates widgets with new IDs, offset positions, and selects the new IDs", () => {
+  it("creates widgets with new IDs, grid-sized offset positions, and selects the new IDs", () => {
     useStore.getState().copyWidgets("s1", ["w1"])
     useStore.getState().pasteWidgets("s1")
     const state = useStore.getState()
@@ -241,8 +248,8 @@ describe("copyWidgets / pasteWidgets", () => {
     expect(newIds).toHaveLength(1)
     expect(newIds[0]).not.toBe("w1")
     const pasted = state.widgets[newIds[0]]
-    expect(pasted.x).toBe(0 + 24)
-    expect(pasted.y).toBe(0 + 24)
+    expect(pasted.x).toBe(0 + 20)
+    expect(pasted.y).toBe(0 + 20)
   })
 })
 
@@ -279,7 +286,7 @@ describe("duplicateWidgetsAt", () => {
     state = useStore.getState()
     expect(state.widgets[cloneIds[0]]).toBeDefined()
     expect(state.widgets[cloneIds[0]].x).toBe(40)
-    expect(state.widgets[cloneIds[0]].y).toBe(50)
+    expect(state.widgets[cloneIds[0]].y).toBe(60)
   })
 })
 
@@ -319,5 +326,35 @@ describe("migratePersistedState", () => {
     }
     const migrated = migratePersistedState(persisted, 3) as { canvasState: { snapToObjects: boolean } }
     expect(migrated.canvasState.snapToObjects).toBe(false)
+  })
+
+  it("quantizes off-grid widget geometry and strips snapToGrid when migrating a v4 blob", () => {
+    const persisted = {
+      canvasState: { offsetX: 0, offsetY: 0, scale: 1, gridEnabled: true, snapToGrid: true, gridSize: 20, snapToObjects: true },
+      widgets: {
+        w1: makeWidget("w1", { x: 150, y: 150, width: 305, height: 280 }),
+      },
+    }
+    const migrated = migratePersistedState(persisted, 4) as {
+      canvasState: { snapToGrid?: boolean }
+      widgets: Record<string, Widget>
+    }
+    expect(migrated.widgets.w1.x).toBe(160)
+    expect(migrated.widgets.w1.y).toBe(160)
+    expect(migrated.widgets.w1.width).toBe(300)
+    expect(migrated.widgets.w1.height).toBe(280)
+    expect(migrated.canvasState.snapToGrid).toBeUndefined()
+  })
+
+  it("clamps a quantized width/height below the minimum back up to MIN_WIDTH/MIN_HEIGHT", () => {
+    const persisted = {
+      canvasState: { offsetX: 0, offsetY: 0, scale: 1, gridEnabled: true, snapToGrid: true, gridSize: 20, snapToObjects: true },
+      widgets: {
+        w1: makeWidget("w1", { x: 0, y: 0, width: 15, height: 30 }),
+      },
+    }
+    const migrated = migratePersistedState(persisted, 4) as { widgets: Record<string, Widget> }
+    expect(migrated.widgets.w1.width).toBe(120)
+    expect(migrated.widgets.w1.height).toBe(80)
   })
 })

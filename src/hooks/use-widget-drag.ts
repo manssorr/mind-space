@@ -133,10 +133,8 @@ export function useWidgetDrag(widgetId: string) {
         let newX = start.x + dx + snapDx
         let newY = start.y + dy + snapDy
 
-        if (state.canvasState.snapToGrid && !(e.metaKey || e.ctrlKey)) {
-          if (!snappedX) newX = Math.round(newX / grid) * grid
-          if (!snappedY) newY = Math.round(newY / grid) * grid
-        }
+        if (!snappedX) newX = Math.round(newX / grid) * grid
+        if (!snappedY) newY = Math.round(newY / grid) * grid
 
         batch.push({ id, x: newX, y: newY })
       }

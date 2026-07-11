@@ -35,7 +35,7 @@ describe("recordSnapshot + moveWidget (drag) two-phase materialization", () => {
 
     useStore.getState().moveWidget("w1", 10, 20)
     const state = useStore.getState()
-    expect(state.widgets.w1.x).toBe(10)
+    expect(state.widgets.w1.x).toBe(20)
     expect(state.widgets.w1.y).toBe(20)
     expect(state.undoStack).toHaveLength(1)
   })
@@ -64,7 +64,7 @@ describe("recordSnapshot + moveWidget (drag) two-phase materialization", () => {
   it("moveWidget without a preceding recordSnapshot still pushes nothing (case 5 preserved)", () => {
     useStore.getState().moveWidget("w1", 10, 20)
     const state = useStore.getState()
-    expect(state.widgets.w1.x).toBe(10)
+    expect(state.widgets.w1.x).toBe(20)
     expect(state.undoStack).toHaveLength(0)
   })
 

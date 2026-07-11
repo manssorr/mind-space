@@ -11,3 +11,7 @@ export function rectsIntersect(a: SelectionBox, b: SelectionBox): boolean {
     a.y + a.height > b.y
   )
 }
+
+export function quantize(value: number, grid: number): number {
+  return Math.round(value / grid) * grid
+}

@@ -3,6 +3,7 @@
 import { memo, useCallback, useState, useRef, useEffect } from "react"
 import { useStore } from "@/store"
 import { IconButton } from "@/components/ui/icon-button"
+import { quantize } from "@/lib/geometry"
 import { Plus, Timer, Clock, Link, Calendar, CheckSquare, StickyNote, Type, ListTodo, Calculator } from "lucide-react"
 import type { WidgetType } from "@/types"
 
@@ -28,6 +29,7 @@ export const AddWidgetButton = memo(function AddWidgetButton() {
 
   const addWidget = useStore((s) => s.addWidget)
   const currentSheetId = useStore((s) => s.currentSheetId)
+  const gridSize = useStore((s) => s.canvasState.gridSize)
 
   const handleAddWidget = useCallback(
     (type: WidgetType) => {
@@ -39,8 +41,8 @@ export const AddWidgetButton = memo(function AddWidgetButton() {
         id,
         type,
         title: isHabit ? "Coding Habit" : label,
-        x: 100 + Math.random() * 100,
-        y: 100 + Math.random() * 100,
+        x: quantize(100 + Math.random() * 100, gridSize),
+        y: quantize(100 + Math.random() * 100, gridSize),
         width: 280,
         height: isHabit ? 340 : 240,
         zIndex: Date.now(),
@@ -49,7 +51,7 @@ export const AddWidgetButton = memo(function AddWidgetButton() {
       })
       setOpen(false)
     },
-    [addWidget, currentSheetId]
+    [addWidget, currentSheetId, gridSize]
   )
 
   useEffect(() => {

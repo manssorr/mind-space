@@ -2,6 +2,7 @@
 
 import { useCallback, useRef } from "react"
 import { useStore } from "@/store"
+import { quantize } from "@/lib/geometry"
 
 export type ResizeDirection =
   | "n"
@@ -60,33 +61,31 @@ export function useWidgetResize(
       const dy = (e.clientY - startPos.current.y) / scale
 
       const { x, y, width, height } = widgetStart.current
+      const grid = state.canvasState.gridSize
 
       let newX = x
       let newY = y
       let newW = width
       let newH = height
 
+      // The fixed edge (x/y, both already grid-aligned since widgetStart
+      // comes from persisted geometry) plus the quantized size gives the
+      // moving edge's exact on-grid position, so we quantize size first
+      // and derive x/y from it rather than quantizing a raw x/y that could
+      // round independently and desync from the fixed edge.
       if (direction.includes("e")) {
-        newW = Math.max(MIN_WIDTH, width + dx)
+        newW = Math.max(MIN_WIDTH, quantize(width + dx, grid))
       }
       if (direction.includes("w")) {
-        newW = Math.max(MIN_WIDTH, width - dx)
+        newW = Math.max(MIN_WIDTH, quantize(width - dx, grid))
         newX = x + width - newW
       }
       if (direction.includes("s")) {
-        newH = Math.max(MIN_HEIGHT, height + dy)
+        newH = Math.max(MIN_HEIGHT, quantize(height + dy, grid))
       }
       if (direction.includes("n")) {
-        newH = Math.max(MIN_HEIGHT, height - dy)
+        newH = Math.max(MIN_HEIGHT, quantize(height - dy, grid))
         newY = y + height - newH
-      }
-
-      if (state.canvasState.snapToGrid) {
-        const grid = state.canvasState.gridSize
-        newX = Math.round(newX / grid) * grid
-        newY = Math.round(newY / grid) * grid
-        newW = Math.max(MIN_WIDTH, Math.round(newW / grid) * grid)
-        newH = Math.max(MIN_HEIGHT, Math.round(newH / grid) * grid)
       }
 
       state.moveWidget(widgetId, newX, newY)

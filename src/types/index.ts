@@ -51,7 +51,6 @@ export interface CanvasState {
   offsetY: number
   scale: number
   gridEnabled: boolean
-  snapToGrid: boolean
   gridSize: number
   snapToObjects: boolean
 }

@@ -5,7 +5,7 @@ import type { PointerEvent } from "react"
 import { useStore } from "@/store"
 import { IconButton } from "@/components/ui/icon-button"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
-import { ZoomIn, ZoomOut, RotateCcw, Maximize2, Grid3x3 } from "lucide-react"
+import { ZoomIn, ZoomOut, RotateCcw, Maximize2 } from "lucide-react"
 import { AddWidgetButton } from "./add-widget-button"
 
 function stopPropagation(e: PointerEvent) {
@@ -80,11 +80,6 @@ export const ZoomControls = memo(function ZoomControls() {
     setCanvasState({ scale, offsetX, offsetY })
   }, [setCanvasState])
 
-  const toggleSnap = useCallback(() => {
-    const { canvasState: cs } = useStore.getState()
-    setCanvasState({ snapToGrid: !cs.snapToGrid })
-  }, [setCanvasState])
-
   return (
     <div
       className="absolute bottom-4 right-4 flex flex-col gap-0.5 rounded-lg border bg-background/80 backdrop-blur-sm p-1 shadow-sm"
@@ -116,15 +111,6 @@ export const ZoomControls = memo(function ZoomControls() {
 
       <IconButton label="Reset zoom" size="md" onClick={resetView}>
         <RotateCcw className="h-4 w-4" />
-      </IconButton>
-
-      <IconButton
-        label={canvasState.snapToGrid ? "Snap to grid: on" : "Snap to grid: off"}
-        size="md"
-        active={canvasState.snapToGrid}
-        onClick={toggleSnap}
-      >
-        <Grid3x3 className="h-4 w-4" />
       </IconButton>
 
       <div className="h-px bg-border mx-1" />
