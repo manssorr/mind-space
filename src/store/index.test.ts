@@ -260,6 +260,67 @@ describe("copyWidgets / pasteWidgets", () => {
     expect(pasted.x).toBe(0 + 20)
     expect(pasted.y).toBe(0 + 20)
   })
+
+  it("carries colorTheme through copy/paste", () => {
+    useStore.setState({
+      widgets: { w1: makeWidget("w1", { colorTheme: "blue" }) },
+    })
+    useStore.getState().copyWidgets("s1", ["w1"])
+    useStore.getState().pasteWidgets("s1")
+    const state = useStore.getState()
+    const pasted = state.widgets[state.selectedWidgetIds[0]]
+    expect(pasted.colorTheme).toBe("blue")
+  })
+
+  it("pastes colorTheme as undefined when source widget has none", () => {
+    useStore.getState().copyWidgets("s1", ["w1"])
+    useStore.getState().pasteWidgets("s1")
+    const state = useStore.getState()
+    const pasted = state.widgets[state.selectedWidgetIds[0]]
+    expect(pasted.colorTheme).toBeUndefined()
+  })
+
+  it("preserves collapsed, data, title, width, and height on paste", () => {
+    useStore.setState({
+      widgets: {
+        w1: makeWidget("w1", {
+          title: "my note",
+          width: 240,
+          height: 180,
+          collapsed: true,
+          data: { text: "hello" },
+          colorTheme: "green",
+        }),
+      },
+    })
+    useStore.getState().copyWidgets("s1", ["w1"])
+    useStore.getState().pasteWidgets("s1")
+    const state = useStore.getState()
+    const pasted = state.widgets[state.selectedWidgetIds[0]]
+    expect(pasted.title).toBe("my note")
+    expect(pasted.width).toBe(240)
+    expect(pasted.height).toBe(180)
+    expect(pasted.collapsed).toBe(true)
+    expect(pasted.data).toEqual({ text: "hello" })
+    expect(pasted.colorTheme).toBe("green")
+  })
+
+  it("pastes cleanly from an old-shape clipboard entry lacking colorTheme", () => {
+    useStore.setState({
+      clipboard: {
+        widgets: [
+          { type: WidgetType.Note, title: "w", width: 100, height: 100, data: {}, collapsed: false, x: 0, y: 0 },
+        ],
+        minX: 0,
+        minY: 0,
+      },
+    })
+    useStore.getState().pasteWidgets("s1")
+    const state = useStore.getState()
+    const pasted = state.widgets[state.selectedWidgetIds[0]]
+    expect(pasted.colorTheme).toBeUndefined()
+    expect(pasted.title).toBe("w")
+  })
 })
 
 describe("duplicateWidgetsAt", () => {

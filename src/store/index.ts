@@ -8,7 +8,7 @@ const MIN_WIDTH = 120
 const MIN_HEIGHT = 80
 
 interface ClipboardData {
-  widgets: (Pick<Widget, "type" | "title" | "width" | "height" | "data" | "collapsed"> & { x: number; y: number })[]
+  widgets: (Pick<Widget, "type" | "title" | "width" | "height" | "data" | "collapsed" | "colorTheme"> & { x: number; y: number })[]
   minX: number
   minY: number
 }
@@ -928,6 +928,7 @@ export const useStore = create<StoreState>()(
             height: w.height,
             data: w.data,
             collapsed: w.collapsed,
+            colorTheme: w.colorTheme,
             x: w.x,
             y: w.y,
           })),
@@ -963,6 +964,7 @@ export const useStore = create<StoreState>()(
               zIndex: maxZ + 1 + index,
               collapsed: data.collapsed,
               data: { ...data.data },
+              colorTheme: data.colorTheme,
             }
             newIds.push(id)
           })
