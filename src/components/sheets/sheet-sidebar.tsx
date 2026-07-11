@@ -12,7 +12,7 @@ import {
 import { createPortal } from "react-dom";
 import { useStore } from "@/store";
 import { cn } from "@/lib/utils";
-import { useToast } from "@/components/ui/toast";
+import { toast } from "sonner";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { IconButton } from "@/components/ui/icon-button";
 import { BackgroundPicker } from "@/components/canvas/background-picker";
@@ -321,7 +321,6 @@ export const SheetSidebar = memo(function SheetSidebar() {
   const canvasBackground = useStore((s) => s.canvasBackground);
   const setSheetBackground = useStore((s) => s.setSheetBackground);
 
-  const { addToast } = useToast();
   const confirm = useConfirm();
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -380,7 +379,7 @@ export const SheetSidebar = memo(function SheetSidebar() {
   const handleAddSheet = useCallback(() => {
     const count = sheets.length + 1;
     addSheet(`Sheet ${count}`);
-    addToast({ title: "Sheet created", variant: "success" });
+    toast.success("Sheet created");
     // Scroll to the right after adding
     requestAnimationFrame(() => {
       const el = scrollContainerRef.current;
@@ -388,7 +387,7 @@ export const SheetSidebar = memo(function SheetSidebar() {
         el.scrollLeft = el.scrollWidth;
       }
     });
-  }, [sheets.length, addSheet, addToast]);
+  }, [sheets.length, addSheet]);
 
   const handleStartRename = useCallback((id: string, title: string) => {
     setEditingId(id);
@@ -399,11 +398,11 @@ export const SheetSidebar = memo(function SheetSidebar() {
     (id: string) => {
       if (editValue.trim()) {
         updateSheet(id, { title: editValue.trim() });
-        addToast({ title: "Sheet renamed" });
+        toast("Sheet renamed");
       }
       setEditingId(null);
     },
-    [editValue, updateSheet, addToast],
+    [editValue, updateSheet],
   );
 
   const handleDelete = useCallback(
@@ -418,18 +417,18 @@ export const SheetSidebar = memo(function SheetSidebar() {
       });
       if (confirmed) {
         deleteSheet(id);
-        addToast({ title: "Sheet deleted", variant: "destructive" });
+        toast.error("Sheet deleted");
       }
     },
-    [sheets, confirm, deleteSheet, addToast],
+    [sheets, confirm, deleteSheet],
   );
 
   const handleDuplicate = useCallback(
     (id: string) => {
       duplicateSheet(id);
-      addToast({ title: "Sheet duplicated", variant: "success" });
+      toast.success("Sheet duplicated");
     },
-    [duplicateSheet, addToast],
+    [duplicateSheet],
   );
 
   const handleSetSheetBackground = useCallback(

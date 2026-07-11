@@ -1,17 +1,13 @@
 "use client"
 
 import { useEffect } from "react"
-import { useToast } from "@/components/ui/toast"
+import { toast } from "sonner"
 
 export function StorageErrorListener() {
-  const { addToast } = useToast()
-
   useEffect(() => {
     function handleStorageError() {
-      addToast({
-        title: "Storage is full",
+      toast.error("Storage is full", {
         description: "Recent changes may not be saved. Export or delete some content.",
-        variant: "destructive",
       })
     }
 
@@ -19,7 +15,7 @@ export function StorageErrorListener() {
     return () => {
       window.removeEventListener("mind-space:storage-error", handleStorageError)
     }
-  }, [addToast])
+  }, [])
 
   return null
 }
