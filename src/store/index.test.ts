@@ -366,4 +366,69 @@ describe("migratePersistedState", () => {
     expect(migrated.widgets.w1.width).toBe(120)
     expect(migrated.widgets.w1.height).toBe(80)
   })
+
+  it("maps gridEnabled false to canvasBackground.pattern none and strips gridEnabled when migrating a v5 blob", () => {
+    const persisted = {
+      canvasState: { offsetX: 0, offsetY: 0, scale: 1, gridEnabled: false, gridSize: 20, snapToObjects: true },
+    }
+    const migrated = migratePersistedState(persisted, 5) as {
+      canvasState: { gridEnabled?: boolean }
+      canvasBackground: { color: string; pattern: string }
+    }
+    expect(migrated.canvasBackground).toEqual({ color: "default", pattern: "none" })
+    expect(migrated.canvasState.gridEnabled).toBeUndefined()
+  })
+
+  it("maps gridEnabled true to canvasBackground.pattern grid when migrating a v5 blob", () => {
+    const persisted = {
+      canvasState: { offsetX: 0, offsetY: 0, scale: 1, gridEnabled: true, gridSize: 20, snapToObjects: true },
+    }
+    const migrated = migratePersistedState(persisted, 5) as {
+      canvasBackground: { color: string; pattern: string }
+    }
+    expect(migrated.canvasBackground).toEqual({ color: "default", pattern: "grid" })
+  })
+})
+
+describe("setCanvasBackground", () => {
+  it("merges a partial update into the existing canvasBackground", () => {
+    useStore.getState().setCanvasBackground({ pattern: "dots" })
+    expect(useStore.getState().canvasBackground.pattern).toBe("dots")
+    expect(useStore.getState().canvasBackground.color).toBe("default")
+
+    useStore.getState().setCanvasBackground({ color: "ocean" })
+    expect(useStore.getState().canvasBackground).toEqual({ color: "ocean", pattern: "dots" })
+  })
+})
+
+describe("setSheetBackground", () => {
+  it("sets a per-sheet override that does not affect other sheets", () => {
+    useStore.setState({
+      sheets: [
+        { id: "s1", title: "Sheet 1", widgetOrder: [], createdAt: 0, updatedAt: 0 },
+        { id: "s2", title: "Sheet 2", widgetOrder: [], createdAt: 0, updatedAt: 0 },
+      ],
+    })
+    useStore.getState().setSheetBackground("s1", { color: "ocean", pattern: "none" })
+    const sheets = useStore.getState().sheets
+    expect(sheets.find((s) => s.id === "s1")?.background).toEqual({ color: "ocean", pattern: "none" })
+    expect(sheets.find((s) => s.id === "s2")?.background).toBeUndefined()
+  })
+
+  it("clears the override when passed null", () => {
+    useStore.setState({
+      sheets: [{ id: "s1", title: "Sheet 1", widgetOrder: [], createdAt: 0, updatedAt: 0, background: { color: "ocean" } }],
+    })
+    useStore.getState().setSheetBackground("s1", null)
+    expect(useStore.getState().sheets.find((s) => s.id === "s1")?.background).toBeUndefined()
+  })
+
+  it("does not push an undo/redo entry", () => {
+    useStore.setState({
+      sheets: [{ id: "s1", title: "Sheet 1", widgetOrder: [], createdAt: 0, updatedAt: 0 }],
+      undoStack: [],
+    })
+    useStore.getState().setSheetBackground("s1", { color: "ocean" })
+    expect(useStore.getState().undoStack).toEqual([])
+  })
 })

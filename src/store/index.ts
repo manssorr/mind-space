@@ -1,6 +1,6 @@
 import { create } from "zustand"
 import { persist, createJSONStorage } from "zustand/middleware"
-import { WidgetType, type Sheet, type Widget, type CanvasState, type ThemeSettings } from "@/types"
+import { WidgetType, type Sheet, type Widget, type CanvasState, type ThemeSettings, type CanvasBackground } from "@/types"
 import { diffForHistory, applyHistoryEntry, isValidHistoryEntry, type HistoryEntry, type HistoryTrio } from "@/lib/history-diff"
 import { quantize } from "@/lib/geometry"
 
@@ -19,6 +19,7 @@ interface StoreState {
   widgets: Record<string, Widget>
   selectedWidgetIds: string[]
   canvasState: CanvasState
+  canvasBackground: CanvasBackground
   themeSettings: ThemeSettings
   undoStack: HistoryEntry[]
   redoStack: HistoryEntry[]
@@ -56,6 +57,9 @@ interface StoreState {
 
   setCanvasState: (state: Partial<CanvasState>) => void
   resetCanvasView: () => void
+
+  setCanvasBackground: (background: Partial<CanvasBackground>) => void
+  setSheetBackground: (sheetId: string, background: Partial<CanvasBackground> | null) => void
 
   setThemeSettings: (settings: Partial<ThemeSettings>) => void
 
@@ -154,6 +158,20 @@ export function migratePersistedState(persisted: unknown, version: number): unkn
       delete canvasState.snapToGrid
     }
   }
+  if (version < 6) {
+    // v5 blobs toggled the grid overlay via canvasState.gridEnabled; that
+    // field is subsumed by canvasBackground.pattern. A disabled grid maps
+    // to pattern "none", otherwise the new default pattern "grid" applies.
+    const canvasState = state.canvasState as (Partial<CanvasState> & { gridEnabled?: boolean }) | undefined
+    const gridWasDisabled = canvasState?.gridEnabled === false
+    if (canvasState) {
+      delete canvasState.gridEnabled
+    }
+    state.canvasBackground = {
+      color: "default",
+      pattern: gridWasDisabled ? "none" : "grid",
+    } satisfies CanvasBackground
+  }
   return state
 }
 
@@ -183,9 +201,13 @@ const defaultCanvasState: CanvasState = {
   offsetX: 0,
   offsetY: 0,
   scale: 1,
-  gridEnabled: true,
   gridSize: 20,
   snapToObjects: true,
+}
+
+const defaultCanvasBackground: CanvasBackground = {
+  color: "default",
+  pattern: "grid",
 }
 
 const defaultThemeSettings: ThemeSettings = {
@@ -329,6 +351,7 @@ export const useStore = create<StoreState>()(
       widgets: {},
       selectedWidgetIds: [],
       canvasState: defaultCanvasState,
+      canvasBackground: defaultCanvasBackground,
       themeSettings: defaultThemeSettings,
       undoStack: [],
       redoStack: [],
@@ -861,6 +884,28 @@ export const useStore = create<StoreState>()(
         set({ canvasState: defaultCanvasState })
       },
 
+      setCanvasBackground: (background) => {
+        set((prev) => ({
+          canvasBackground: { ...prev.canvasBackground, ...background },
+        }))
+      },
+
+      setSheetBackground: (sheetId, background) => {
+        set((prev) => ({
+          sheets: prev.sheets.map((s) =>
+            s.id === sheetId
+              ? {
+                  ...s,
+                  background:
+                    background === null
+                      ? undefined
+                      : { ...s.background, ...background },
+                }
+              : s
+          ),
+        }))
+      },
+
       setThemeSettings: (settings) => {
         set((prev) => ({
           themeSettings: { ...prev.themeSettings, ...settings },
@@ -979,13 +1024,14 @@ export const useStore = create<StoreState>()(
     {
       name: "mind-space-store",
       storage: createJSONStorage(() => debouncedStorage),
-      version: 5,
+      version: 6,
       migrate: migratePersistedState,
       partialize: (state) => ({
         sheets: state.sheets,
         currentSheetId: state.currentSheetId,
         widgets: state.widgets,
         canvasState: state.canvasState,
+        canvasBackground: state.canvasBackground,
         themeSettings: state.themeSettings,
         clipboard: state.clipboard,
         undoStack: state.undoStack,

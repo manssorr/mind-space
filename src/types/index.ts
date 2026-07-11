@@ -37,6 +37,13 @@ export interface Widget {
   colorTheme?: string
 }
 
+export type BackgroundPattern = "grid" | "dots" | "none"
+
+export interface CanvasBackground {
+  color: string
+  pattern: BackgroundPattern
+}
+
 export interface Sheet {
   id: string
   title: string
@@ -44,13 +51,13 @@ export interface Sheet {
   widgetOrder: string[]
   createdAt: number
   updatedAt: number
+  background?: Partial<CanvasBackground>
 }
 
 export interface CanvasState {
   offsetX: number
   offsetY: number
   scale: number
-  gridEnabled: boolean
   gridSize: number
   snapToObjects: boolean
 }
