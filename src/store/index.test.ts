@@ -69,6 +69,15 @@ describe("duplicateSheet", () => {
     expect(newWidgetId).not.toBe("w1")
     expect(state.widgets[newWidgetId].title).toBe("w (copy)")
   })
+
+  it("keeps the same x/y position as the source widget", () => {
+    useStore.getState().duplicateSheet("s1")
+    const state = useStore.getState()
+    const newSheet = state.sheets[1]
+    const newWidgetId = newSheet.widgetOrder[0]
+    expect(state.widgets[newWidgetId].x).toBe(state.widgets.w1.x)
+    expect(state.widgets[newWidgetId].y).toBe(state.widgets.w1.y)
+  })
 })
 
 describe("updateWidget", () => {

@@ -415,8 +415,6 @@ export const useStore = create<StoreState>()(
             newWidgets[newWid] = {
               ...w,
               id: newWid,
-              x: w.x + 24,
-              y: w.y + 24,
               title: `${w.title} (copy)`,
             }
           }
