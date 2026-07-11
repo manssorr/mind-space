@@ -12,6 +12,8 @@ import { useCanvasGestures } from "@/hooks/use-canvas-gestures"
 import { MarqueeOverlay } from "./marquee-overlay"
 import { SnapGuides } from "./snap-guides"
 import { LayoutTemplate } from "lucide-react"
+import { useTheme } from "@/components/theme-provider"
+import { resolveBackgroundColor } from "@/lib/backgrounds"
 
 const CanvasWidget = memo(function CanvasWidget({ widgetId }: { widgetId: string }) {
   const type = useStore((s) => s.widgets[widgetId]?.type)
@@ -47,42 +49,66 @@ export function Canvas() {
   const currentSheetId = useStore((s) => s.currentSheetId)
   const widgetOrder = useStore((s) => s.sheets.find((sh) => sh.id === s.currentSheetId)?.widgetOrder)
   const canvasState = useStore((s) => s.canvasState)
+  const canvasBackground = useStore((s) => s.canvasBackground)
+  const sheetBackground = useStore((s) => s.sheets.find((sh) => sh.id === s.currentSheetId)?.background)
+  const { resolvedTheme } = useTheme()
 
   useKeyboardShortcuts()
   const { onPointerDown, onPointerMove, onPointerUp, onPointerCancel } = useCanvasGestures(containerRef)
 
-  const spacing = canvasState.gridSize * canvasState.scale
-  const showGrid = canvasState.gridEnabled && spacing >= 4
+  const effectiveBackground = useMemo(
+    () => ({ ...canvasBackground, ...sheetBackground }),
+    [canvasBackground, sheetBackground]
+  )
 
-  const gridStyle = useMemo(() => {
-    if (!showGrid) return undefined
-    return {
+  const spacing = canvasState.gridSize * canvasState.scale
+  const showPattern = effectiveBackground.pattern !== "none" && spacing >= 4
+
+  const patternStyle = useMemo(() => {
+    if (!showPattern) return undefined
+    const base = {
       position: "absolute" as const,
       left: 0,
       top: 0,
       width: "100%",
       height: "100%",
       pointerEvents: "none" as const,
+      backgroundSize: `${spacing}px ${spacing}px`,
+      backgroundPosition: `${canvasState.offsetX % spacing}px ${canvasState.offsetY % spacing}px`,
+    }
+    if (effectiveBackground.pattern === "dots") {
+      return {
+        ...base,
+        backgroundImage: "radial-gradient(circle, hsl(var(--border) / 0.9) 1.5px, transparent 1.5px)",
+      } satisfies React.CSSProperties
+    }
+    return {
+      ...base,
       backgroundImage: [
         "linear-gradient(to right, hsl(var(--border) / 0.3) 1px, transparent 1px)",
         "linear-gradient(to bottom, hsl(var(--border) / 0.3) 1px, transparent 1px)",
       ].join(", "),
-      backgroundSize: `${spacing}px ${spacing}px`,
-      backgroundPosition: `${canvasState.offsetX % spacing}px ${canvasState.offsetY % spacing}px`,
     } satisfies React.CSSProperties
-  }, [showGrid, spacing, canvasState.offsetX, canvasState.offsetY])
+  }, [showPattern, spacing, canvasState.offsetX, canvasState.offsetY, effectiveBackground.pattern])
+
+  const isDefaultColor = effectiveBackground.color === "default" || !effectiveBackground.color
 
   return (
     <div
       ref={containerRef}
-      className="h-full overflow-hidden relative bg-background"
-      style={{ touchAction: "none" }}
+      className={`h-full overflow-hidden relative ${isDefaultColor ? "bg-background" : ""}`}
+      style={{
+        touchAction: "none",
+        ...(isDefaultColor
+          ? {}
+          : { backgroundColor: resolveBackgroundColor(effectiveBackground.color, resolvedTheme === "dark") }),
+      }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerCancel}
     >
-      {gridStyle && <div style={gridStyle} />}
+      {patternStyle && <div style={patternStyle} />}
 
       <div
         className="absolute left-0 top-0"
