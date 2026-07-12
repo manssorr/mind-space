@@ -1,6 +1,7 @@
 export enum WidgetType {
   Note = "note",
   Todo = "todo",
+  TodoHub = "todo-hub",
   Calendar = "calendar",
   Text = "text",
   Habit = "habit",
