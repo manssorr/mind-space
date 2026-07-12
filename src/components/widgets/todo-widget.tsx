@@ -9,7 +9,7 @@ import { InlineInput } from "@/components/ui/icon-button"
 import { GripVertical, Trash2, Check, Clock3, ChevronRight } from "lucide-react"
 import type { ListItem } from "@/types"
 
-interface TodoViewData {
+export interface TodoViewData {
   view: { source: { listId: string } }
 }
 
@@ -19,7 +19,7 @@ const DRAG_THRESHOLD_SQ = 25
 const AUTOSCROLL_EDGE_PX = 32
 const AUTOSCROLL_SPEED = 8
 
-interface TodoRowProps {
+export interface TodoRowProps {
   item: ListItem
   isDragging: boolean
   isDropTarget: boolean
@@ -36,7 +36,7 @@ interface TodoRowProps {
   editInputRef: React.RefObject<HTMLInputElement | null>
 }
 
-const TodoRow = memo(function TodoRow({
+export const TodoRow = memo(function TodoRow({
   item,
   isDragging,
   isDropTarget,
