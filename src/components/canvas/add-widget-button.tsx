@@ -4,20 +4,9 @@ import { memo, useCallback, useState, useRef, useEffect } from "react"
 import { useStore } from "@/store"
 import { IconButton } from "@/components/ui/icon-button"
 import { quantize } from "@/lib/geometry"
-import { Plus, Timer, Clock, Link, Calendar, CheckSquare, StickyNote, Type, ListTodo, Calculator } from "lucide-react"
+import { Plus } from "lucide-react"
 import type { WidgetType } from "@/types"
-
-const WIDGET_OPTIONS: { type: WidgetType; label: string; icon: typeof Timer }[] = [
-  { type: "note" as WidgetType, label: "Note", icon: StickyNote },
-  { type: "text" as WidgetType, label: "Label", icon: Type },
-  { type: "timer" as WidgetType, label: "Timer", icon: Timer },
-  { type: "stopwatch" as WidgetType, label: "Stopwatch", icon: Clock },
-  { type: "quicklink" as WidgetType, label: "Quick Link", icon: Link },
-  { type: "calendar" as WidgetType, label: "Calendar", icon: Calendar },
-  { type: "habit" as WidgetType, label: "Habit Tracker", icon: CheckSquare },
-  { type: "todo" as WidgetType, label: "Todo List", icon: ListTodo },
-  { type: "counter" as WidgetType, label: "Counter", icon: Calculator },
-]
+import { WIDGET_DEFS } from "@/components/widgets/widget-registry"
 
 function stopPropagation(e: React.PointerEvent) {
   e.stopPropagation()
@@ -36,30 +25,29 @@ export const AddWidgetButton = memo(function AddWidgetButton() {
   const handleAddWidget = useCallback(
     (type: WidgetType) => {
       if (!currentSheetId) return
+      const def = WIDGET_DEFS[type]
+      if (!def) return
       const id = crypto.randomUUID()
-      const label = WIDGET_OPTIONS.find((o) => o.type === type)?.label ?? type
-      const isHabit = type === "habit"
       const isTodo = type === "todo"
-      const title = isHabit ? "Coding Habit" : label
 
       // Creating a todo widget also creates its backing list - both must
       // land as a single undo entry, matching every other single-action
       // widget-add. recordSnapshot() + two mutations collapses to one
       // history entry (same two-phase pattern drag/resize use).
       if (isTodo) recordSnapshot()
-      const listId = isTodo ? createList(title) : null
+      const listId = isTodo ? createList(def.defaultTitle) : null
 
       addWidget(currentSheetId, {
         id,
         type,
-        title,
+        title: def.defaultTitle,
         x: quantize(100 + Math.random() * 100, gridSize),
         y: quantize(100 + Math.random() * 100, gridSize),
-        width: 280,
-        height: isHabit ? 340 : 240,
+        width: quantize(def.defaultSize.width, gridSize),
+        height: quantize(def.defaultSize.height, gridSize),
         zIndex: Date.now(),
         collapsed: false,
-        data: listId ? { view: { source: { listId } } } : {},
+        data: listId ? { view: { source: { listId } } } : def.defaultData,
       })
       setOpen(false)
     },
@@ -93,22 +81,22 @@ export const AddWidgetButton = memo(function AddWidgetButton() {
       {open && (
         <div
           ref={menuRef}
-          className="absolute bottom-full right-0 mb-2 rounded-lg border bg-popover text-popover-foreground shadow-md p-1 min-w-40"
+          className="absolute bottom-full right-0 mb-2 rounded-lg border bg-popover text-popover-foreground shadow-md p-1 min-w-40 menu-enter origin-bottom-right"
           onPointerDown={stopPropagation}
         >
-          {WIDGET_OPTIONS.map((option) => {
-            const Icon = option.icon
+          {Object.values(WIDGET_DEFS).map((def) => {
+            const Icon = def.icon
             return (
               <button
-                key={option.type}
+                key={def.type}
                 className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
                 onClick={(e) => {
                   e.stopPropagation()
-                  handleAddWidget(option.type)
+                  handleAddWidget(def.type)
                 }}
               >
                 <Icon className="h-3.5 w-3.5" />
-                {option.label}
+                {def.label}
               </button>
             )
           })}

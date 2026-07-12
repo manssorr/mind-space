@@ -58,7 +58,7 @@ export const CounterWidget = memo(function CounterWidget({ widgetId }: { widgetI
       <div className="flex items-center gap-3">
         <button
           onClick={handleDecrement}
-          className="flex h-8 w-8 items-center justify-center rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground transition-colors"
+          className="flex h-8 w-8 items-center justify-center rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground transition-[color,background-color,transform] duration-150 ease-out active:scale-[0.97]"
           title="Decrease"
           aria-label="Decrease"
         >
@@ -67,7 +67,7 @@ export const CounterWidget = memo(function CounterWidget({ widgetId }: { widgetI
 
         <button
           onClick={handleIncrement}
-          className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+          className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-[color,background-color,transform] duration-150 ease-out active:scale-[0.97]"
           title="Increase"
           aria-label="Increase"
         >
@@ -76,7 +76,7 @@ export const CounterWidget = memo(function CounterWidget({ widgetId }: { widgetI
 
         <button
           onClick={handleReset}
-          className="flex h-8 w-8 items-center justify-center rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground transition-colors"
+          className="flex h-8 w-8 items-center justify-center rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground transition-[color,background-color,transform] duration-150 ease-out active:scale-[0.97]"
           title="Reset"
           aria-label="Reset"
         >
