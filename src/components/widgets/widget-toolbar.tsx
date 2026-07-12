@@ -126,7 +126,7 @@ export const WidgetToolbar = memo(function WidgetToolbar({
 
           {actionsOpen && (
             <div
-              className="absolute right-0 top-full z-20 mt-1 min-w-44 rounded-lg border bg-popover p-1 shadow-md"
+              className="absolute right-0 top-full z-20 mt-1 min-w-44 rounded-lg border bg-popover p-1 shadow-md menu-enter origin-top-right"
               onPointerDown={stopPropagation}
             >
               <button
@@ -153,8 +153,8 @@ export const WidgetToolbar = memo(function WidgetToolbar({
                   const s = useStore.getState();
                   if (!s.currentSheetId) return;
                   handleAction(
-                    (id) => s.deleteWidget(s.currentSheetId!, id),
-                    (ids) => s.deleteWidgets(s.currentSheetId!, ids),
+                    (id) => s.deleteWidgetAnimated(s.currentSheetId!, id),
+                    (ids) => s.deleteWidgetsAnimated(s.currentSheetId!, ids),
                   );
                   setActionsOpen(false);
                 }}

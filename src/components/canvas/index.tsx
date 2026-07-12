@@ -51,6 +51,7 @@ export function Canvas() {
   const canvasState = useStore((s) => s.canvasState)
   const canvasBackground = useStore((s) => s.canvasBackground)
   const sheetBackground = useStore((s) => s.sheets.find((sh) => sh.id === s.currentSheetId)?.background)
+  const canvasAnimating = useStore((s) => s.canvasAnimating)
   const { resolvedTheme } = useTheme()
 
   useKeyboardShortcuts()
@@ -116,6 +117,7 @@ export function Canvas() {
           transform: `translate(${canvasState.offsetX}px, ${canvasState.offsetY}px) scale(${canvasState.scale})`,
           transformOrigin: "0 0",
           willChange: "transform",
+          transition: canvasAnimating ? "transform 200ms var(--ease-in-out)" : "none",
         }}
       >
         {widgetOrder?.map((id) => (

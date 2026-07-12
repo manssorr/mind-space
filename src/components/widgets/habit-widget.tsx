@@ -3,7 +3,7 @@
 import { memo, useCallback, useMemo, useState } from "react"
 import { useStore } from "@/store"
 import { cn } from "@/lib/utils"
-import { toDateString } from "@/lib/date-utils"
+import { toDateString, getMonthGrid } from "@/lib/date-utils"
 import { getWidgetData } from "@/lib/widget-utils"
 import { Plus, Check, ChevronLeft, ChevronRight } from "lucide-react"
 import { InlineInput } from "@/components/ui/icon-button"
@@ -38,40 +38,13 @@ function getStreak(completionDates: string[]): number {
 
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
-function getMonthGrid(year: number, month: number) {
-  const firstDay = new Date(year, month, 1).getDay()
-  const startOffset = firstDay === 0 ? 6 : firstDay - 1
-  const daysInMonth = new Date(year, month + 1, 0).getDate()
-  const daysInPrev = new Date(year, month, 0).getDate()
-
-  const cells: { day: number; current: boolean; date: string }[] = []
-
-  for (let i = startOffset - 1; i >= 0; i--) {
-    const d = daysInPrev - i
-    const date = `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`
-    cells.push({ day: d, current: false, date })
-  }
-
-  for (let d = 1; d <= daysInMonth; d++) {
-    const date = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`
-    cells.push({ day: d, current: true, date })
-  }
-
-  const remaining = 7 - (cells.length % 7 || 7)
-  for (let d = 1; d <= remaining; d++) {
-    const date = `${year}-${String(month + 2).padStart(2, "0")}-${String(d).padStart(2, "0")}`
-    cells.push({ day: d, current: false, date })
-  }
-
-  return cells
-}
-
 export const HabitWidget = memo(function HabitWidget({ widgetId }: { widgetId: string }) {
   const widget = useStore((s) => s.widgets[widgetId])
   const updateWidget = useStore((s) => s.updateWidget)
   const [viewDate, setViewDate] = useState(() => new Date())
   const [editingName, setEditingName] = useState(false)
   const [nameInput, setNameInput] = useState("")
+  const [popping, setPopping] = useState(false)
 
   const data = useMemo(() => getWidgetData<HabitData>(widget), [widget])
   const habitName = data.habitName ?? "Coding"
@@ -85,7 +58,7 @@ export const HabitWidget = memo(function HabitWidget({ widgetId }: { widgetId: s
 
   const year = viewDate.getFullYear()
   const month = viewDate.getMonth()
-  const cells = useMemo(() => getMonthGrid(year, month), [year, month])
+  const cells = useMemo(() => getMonthGrid(year, month, 1), [year, month])
 
   const monthName = viewDate.toLocaleDateString("en-US", {
     month: "long",
@@ -228,13 +201,18 @@ export const HabitWidget = memo(function HabitWidget({ widgetId }: { widgetId: s
         <button
           onClick={(e) => {
             e.stopPropagation()
+            if (!isTodayCompleted) setPopping(true)
             toggleToday()
           }}
+          onAnimationEnd={(e) => {
+            if (e.animationName === "habit-pop") setPopping(false)
+          }}
           className={cn(
-            "flex h-12 w-12 items-center justify-center rounded-full transition-all",
+            "flex h-12 w-12 items-center justify-center rounded-full transition-[color,background-color,transform] duration-150 ease-out active:scale-[0.97]",
             isTodayCompleted
               ? "bg-primary text-primary-foreground"
-              : "bg-muted text-muted-foreground hover:bg-primary hover:text-primary-foreground"
+              : "bg-muted text-muted-foreground hover:bg-primary hover:text-primary-foreground",
+            popping && "habit-pop"
           )}
           title={isTodayCompleted ? "Mark incomplete" : "Log completed session"}
           aria-label={isTodayCompleted ? "Mark incomplete" : "Log completed session"}
