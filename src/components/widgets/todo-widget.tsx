@@ -6,42 +6,21 @@ import { cn } from "@/lib/utils"
 import { getWidgetData } from "@/lib/widget-utils"
 import { InlineInput } from "@/components/ui/icon-button"
 import { Plus, Trash2, Check, Clock3 } from "lucide-react"
+import type { ListItem } from "@/types"
 
-type TodoStatus = "todo" | "progress" | "done"
-
-interface TodoItem {
-  id: string
-  text: string
-  done?: boolean
-  status?: TodoStatus
+interface TodoViewData {
+  view: { source: { listId: string } }
 }
 
-interface TodoData {
-  items: TodoItem[]
-}
-
-function getTodoStatus(item: TodoItem): TodoStatus {
-  if (item.status) return item.status
-  return item.done ? "done" : "todo"
-}
-
-function withTodoStatus(item: TodoItem, status: TodoStatus): TodoItem {
-  return {
-    ...item,
-    status,
-    done: status === "done",
-  }
-}
-
-function getNextTodoStatus(status: TodoStatus): TodoStatus {
-  if (status === "todo") return "progress"
-  if (status === "progress") return "done"
-  return "todo"
-}
+const EMPTY_ITEMS: ListItem[] = []
 
 export const TodoWidget = memo(function TodoWidget({ widgetId }: { widgetId: string }) {
   const widget = useStore((s) => s.widgets[widgetId])
-  const updateWidget = useStore((s) => s.updateWidget)
+  const listItems = useStore((s) => s.listItems)
+  const addListItem = useStore((s) => s.addListItem)
+  const cycleListItemStatus = useStore((s) => s.cycleListItemStatus)
+  const deleteListItem = useStore((s) => s.deleteListItem)
+  const updateListItem = useStore((s) => s.updateListItem)
   const [newTodoText, setNewTodoText] = useState("")
   const [adding, setAdding] = useState(false)
   const [editingTodoId, setEditingTodoId] = useState<string | null>(null)
@@ -49,46 +28,39 @@ export const TodoWidget = memo(function TodoWidget({ widgetId }: { widgetId: str
   const inputRef = useRef<HTMLInputElement>(null)
   const editInputRef = useRef<HTMLInputElement>(null)
 
-  const data = useMemo(() => getWidgetData<TodoData>(widget), [widget])
-  const items = useMemo(() => data.items ?? [], [data.items])
+  const data = useMemo(() => getWidgetData<TodoViewData>(widget), [widget])
+  const listId = data.view?.source?.listId
+
+  const items = useMemo(() => {
+    if (!listId) return EMPTY_ITEMS
+    return Object.values(listItems)
+      .filter((item) => item.listId === listId)
+      .sort((a, b) => (a.order < b.order ? -1 : a.order > b.order ? 1 : 0))
+  }, [listItems, listId])
 
   const handleAddTodo = useCallback(() => {
     const trimmed = newTodoText.trim()
-    if (!trimmed) return
-    const newItem: TodoItem = {
-      id: crypto.randomUUID(),
-      text: trimmed,
-      status: "todo",
-      done: false,
-    }
-    updateWidget(widgetId, {
-      data: { items: [...items, newItem] },
-    })
+    if (!trimmed || !listId) return
+    addListItem(listId, trimmed)
     setNewTodoText("")
     setAdding(false)
-  }, [newTodoText, items, updateWidget, widgetId])
+  }, [newTodoText, listId, addListItem])
 
   const toggleTodo = useCallback(
     (itemId: string) => {
-      const updated = items.map((item) =>
-        item.id === itemId
-          ? withTodoStatus(item, getNextTodoStatus(getTodoStatus(item)))
-          : item
-      )
-      updateWidget(widgetId, { data: { items: updated } })
+      cycleListItemStatus(itemId)
     },
-    [items, updateWidget, widgetId]
+    [cycleListItemStatus]
   )
 
   const deleteTodo = useCallback(
     (itemId: string) => {
-      const updated = items.filter((item) => item.id !== itemId)
-      updateWidget(widgetId, { data: { items: updated } })
+      deleteListItem(itemId)
     },
-    [items, updateWidget, widgetId]
+    [deleteListItem]
   )
 
-  const startEditingTodo = useCallback((item: TodoItem) => {
+  const startEditingTodo = useCallback((item: ListItem) => {
     setEditingTodoId(item.id)
     setEditTodoText(item.text)
     requestAnimationFrame(() => editInputRef.current?.select())
@@ -108,12 +80,9 @@ export const TodoWidget = memo(function TodoWidget({ widgetId }: { widgetId: str
       return
     }
 
-    const updated = items.map((item) =>
-      item.id === editingTodoId ? { ...item, text: trimmed } : item
-    )
-    updateWidget(widgetId, { data: { items: updated } })
+    updateListItem(editingTodoId, { text: trimmed })
     cancelEditingTodo()
-  }, [cancelEditingTodo, editTodoText, editingTodoId, items, updateWidget, widgetId])
+  }, [cancelEditingTodo, editTodoText, editingTodoId, updateListItem])
 
   const startAdding = useCallback(() => {
     setAdding(true)
@@ -127,7 +96,7 @@ export const TodoWidget = memo(function TodoWidget({ widgetId }: { widgetId: str
   }, [cancelEditingTodo, editingTodoId, items])
 
   const completedCount = useMemo(
-    () => items.filter((item) => getTodoStatus(item) === "done").length,
+    () => items.filter((item) => item.status === "done").length,
     [items]
   )
 
@@ -151,7 +120,7 @@ export const TodoWidget = memo(function TodoWidget({ widgetId }: { widgetId: str
 
       <div className="flex-1 overflow-y-auto space-y-0.5">
         {items.map((item) => {
-          const status = getTodoStatus(item)
+          const status = item.status
 
           return (
             <div
