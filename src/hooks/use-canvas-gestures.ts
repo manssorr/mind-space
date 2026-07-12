@@ -80,6 +80,7 @@ export function useCanvasGestures(containerRef: React.RefObject<HTMLDivElement |
 
   const onPointerDown = useCallback(
     (e: React.PointerEvent) => {
+      if (useStore.getState().canvasAnimating) useStore.getState().setCanvasAnimating(false)
       activePointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
 
       if (activePointers.current.size === 2) {

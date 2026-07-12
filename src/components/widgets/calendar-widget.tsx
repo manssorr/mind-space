@@ -3,7 +3,7 @@
 import { memo, useCallback, useMemo, useState } from "react"
 import { useStore } from "@/store"
 import { cn } from "@/lib/utils"
-import { toDateString } from "@/lib/date-utils"
+import { toDateString, getMonthGrid } from "@/lib/date-utils"
 import { getWidgetData } from "@/lib/widget-utils"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 
@@ -12,33 +12,6 @@ interface CalendarData {
 }
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-
-function getMonthGrid(year: number, month: number) {
-  const firstDay = new Date(year, month, 1).getDay()
-  const daysInMonth = new Date(year, month + 1, 0).getDate()
-  const daysInPrev = new Date(year, month, 0).getDate()
-
-  const cells: { day: number; current: boolean; date: string }[] = []
-
-  for (let i = firstDay - 1; i >= 0; i--) {
-    const d = daysInPrev - i
-    const date = `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`
-    cells.push({ day: d, current: false, date })
-  }
-
-  for (let d = 1; d <= daysInMonth; d++) {
-    const date = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`
-    cells.push({ day: d, current: true, date })
-  }
-
-  const remaining = 7 - (cells.length % 7 || 7)
-  for (let d = 1; d <= remaining; d++) {
-    const date = `${year}-${String(month + 2).padStart(2, "0")}-${String(d).padStart(2, "0")}`
-    cells.push({ day: d, current: false, date })
-  }
-
-  return cells
-}
 
 export const CalendarWidget = memo(function CalendarWidget({ widgetId }: { widgetId: string }) {
   const widget = useStore((s) => s.widgets[widgetId])
@@ -54,7 +27,7 @@ export const CalendarWidget = memo(function CalendarWidget({ widgetId }: { widge
   const year = viewDate.getFullYear()
   const month = viewDate.getMonth()
 
-  const cells = useMemo(() => getMonthGrid(year, month), [year, month])
+  const cells = useMemo(() => getMonthGrid(year, month, 0), [year, month])
 
   const monthName = viewDate.toLocaleDateString("en-US", {
     month: "long",
@@ -183,7 +156,7 @@ export const CalendarWidget = memo(function CalendarWidget({ widgetId }: { widge
             />
             <button
               onClick={handleSaveNote}
-              className="h-6 shrink-0 rounded bg-primary px-2 text-[10px] font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+              className="h-6 shrink-0 rounded bg-primary px-2 text-[10px] font-medium text-primary-foreground hover:bg-primary/90 transition-[color,background-color,transform] duration-150 ease-out active:scale-[0.97]"
             >
               Save
             </button>
