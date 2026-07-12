@@ -28,6 +28,8 @@ export const AddWidgetButton = memo(function AddWidgetButton() {
   const menuRef = useRef<HTMLDivElement>(null)
 
   const addWidget = useStore((s) => s.addWidget)
+  const createList = useStore((s) => s.createList)
+  const recordSnapshot = useStore((s) => s.recordSnapshot)
   const currentSheetId = useStore((s) => s.currentSheetId)
   const gridSize = useStore((s) => s.canvasState.gridSize)
 
@@ -37,21 +39,31 @@ export const AddWidgetButton = memo(function AddWidgetButton() {
       const id = crypto.randomUUID()
       const label = WIDGET_OPTIONS.find((o) => o.type === type)?.label ?? type
       const isHabit = type === "habit"
+      const isTodo = type === "todo"
+      const title = isHabit ? "Coding Habit" : label
+
+      // Creating a todo widget also creates its backing list - both must
+      // land as a single undo entry, matching every other single-action
+      // widget-add. recordSnapshot() + two mutations collapses to one
+      // history entry (same two-phase pattern drag/resize use).
+      if (isTodo) recordSnapshot()
+      const listId = isTodo ? createList(title) : null
+
       addWidget(currentSheetId, {
         id,
         type,
-        title: isHabit ? "Coding Habit" : label,
+        title,
         x: quantize(100 + Math.random() * 100, gridSize),
         y: quantize(100 + Math.random() * 100, gridSize),
         width: 280,
         height: isHabit ? 340 : 240,
         zIndex: Date.now(),
         collapsed: false,
-        data: {},
+        data: listId ? { view: { source: { listId } } } : {},
       })
       setOpen(false)
     },
-    [addWidget, currentSheetId, gridSize]
+    [addWidget, createList, recordSnapshot, currentSheetId, gridSize]
   )
 
   useEffect(() => {

@@ -1,11 +1,17 @@
 import { create } from "zustand"
 import { persist, createJSONStorage } from "zustand/middleware"
-import { WidgetType, type Sheet, type Widget, type CanvasState, type ThemeSettings, type CanvasBackground, type ResizeHandleStyle } from "@/types"
+import { WidgetType, type Sheet, type Widget, type CanvasState, type ThemeSettings, type CanvasBackground, type ResizeHandleStyle, type List, type ListItem, type ListItemStatus } from "@/types"
 import { diffForHistory, applyHistoryEntry, isValidHistoryEntry, type HistoryEntry, type HistoryTrio } from "@/lib/history-diff"
 import { quantize } from "@/lib/geometry"
+import { orderKeyBetween } from "@/lib/order-key"
 
 const MIN_WIDTH = 120
 const MIN_HEIGHT = 80
+
+interface ClipboardTodoData extends Record<string, unknown> {
+  view: { source: { listId: string } }
+  items: Pick<ListItem, "text" | "status" | "order" | "tags">[]
+}
 
 interface ClipboardData {
   widgets: (Pick<Widget, "type" | "title" | "width" | "height" | "data" | "collapsed" | "colorTheme"> & { x: number; y: number })[]
@@ -13,10 +19,143 @@ interface ClipboardData {
   minY: number
 }
 
+function getNextListItemStatus(status: ListItemStatus): ListItemStatus {
+  if (status === "todo") return "progress"
+  if (status === "progress") return "done"
+  return "todo"
+}
+
+interface TodoViewData {
+  view: { source: { listId: string } }
+}
+
+function isTodoViewData(data: unknown): data is TodoViewData {
+  if (typeof data !== "object" || data === null) return false
+  const view = (data as { view?: unknown }).view
+  if (typeof view !== "object" || view === null) return false
+  const source = (view as { source?: unknown }).source
+  if (typeof source !== "object" || source === null) return false
+  return typeof (source as { listId?: unknown }).listId === "string"
+}
+
+/**
+ * A duplicated/pasted todo widget must fork its list (new list + copied
+ * items), not share the original - a duplicate is a fork, not a second
+ * view onto the same data (design 033). Mutates `newLists`/`newListItems`
+ * in place with the forked entities and returns the widget's replacement
+ * `data`, or the original `data` unchanged for non-todo widgets.
+ */
+function forkTodoListForDuplicate(
+  widget: Widget,
+  lists: Record<string, List>,
+  listItems: Record<string, ListItem>,
+  newLists: Record<string, List>,
+  newListItems: Record<string, ListItem>
+): Record<string, unknown> {
+  if (widget.type !== WidgetType.Todo || !isTodoViewData(widget.data)) {
+    return widget.data
+  }
+  const sourceListId = widget.data.view.source.listId
+  if (!lists[sourceListId]) return widget.data
+  const forkedListId = crypto.randomUUID()
+  newLists[forkedListId] = {
+    id: forkedListId,
+    name: widget.title,
+    createdAt: Date.now(),
+  }
+  const sourceItems = Object.values(listItems)
+    .filter((item) => item.listId === sourceListId)
+    .sort((a, b) => (a.order < b.order ? -1 : a.order > b.order ? 1 : 0))
+  for (const item of sourceItems) {
+    const forkedId = crypto.randomUUID()
+    newListItems[forkedId] = { ...item, id: forkedId, listId: forkedListId }
+  }
+  return { view: { source: { listId: forkedListId } } }
+}
+
+interface LegacyTodoItem {
+  id: string
+  text: string
+  done?: boolean
+  status?: ListItemStatus
+}
+
+function isLegacyTodoData(data: unknown): data is { items: LegacyTodoItem[] } {
+  if (typeof data !== "object" || data === null) return false
+  return Array.isArray((data as { items?: unknown }).items)
+}
+
+function legacyItemStatus(item: LegacyTodoItem): ListItemStatus {
+  if (item.status === "progress") return "progress"
+  if (item.done || item.status === "done") return "done"
+  return "todo"
+}
+
+/**
+ * Snapshots a todo widget's current items (by listId) into the clipboard
+ * payload, so a paste can create a fresh, independent list (fork semantics -
+ * a paste is not a second view onto the source list).
+ */
+function snapshotTodoClipboardData(data: TodoViewData, listItems: Record<string, ListItem>): ClipboardTodoData {
+  const items = Object.values(listItems)
+    .filter((item) => item.listId === data.view.source.listId)
+    .sort((a, b) => (a.order < b.order ? -1 : a.order > b.order ? 1 : 0))
+    .map((item) => ({ text: item.text, status: item.status, order: item.order, tags: item.tags }))
+  return { view: data.view, items }
+}
+
+/**
+ * Builds the pasted widget's `data` for a todo widget, creating a fresh
+ * list + items from the clipboard snapshot. Handles both current-shape
+ * (`{ view, items }`) and legacy (`{ items: [...] }`, pre-normalization)
+ * clipboard payloads. Non-todo widgets pass through unchanged.
+ */
+function hoistTodoClipboardData(
+  type: WidgetType,
+  title: string,
+  data: unknown,
+  newLists: Record<string, List>,
+  newListItems: Record<string, ListItem>
+): Record<string, unknown> {
+  if (type !== WidgetType.Todo) return data as Record<string, unknown>
+
+  const listId = crypto.randomUUID()
+  newLists[listId] = { id: listId, name: title, createdAt: Date.now() }
+
+  let sourceItems: { text: string; status: ListItemStatus; order?: string; tags?: string[] }[] = []
+  if (data && typeof data === "object" && "items" in data && Array.isArray((data as ClipboardTodoData).items)) {
+    const clipboardData = data as ClipboardTodoData
+    sourceItems = clipboardData.items
+  } else if (isLegacyTodoData(data)) {
+    sourceItems = data.items.map((item) => ({ text: item.text, status: legacyItemStatus(item) }))
+  }
+
+  let lastOrder: string | null = null
+  for (const item of sourceItems) {
+    const itemId = crypto.randomUUID()
+    const order: string = item.order ?? orderKeyBetween(lastOrder, null)
+    lastOrder = order
+    newListItems[itemId] = {
+      id: itemId,
+      listId,
+      text: item.text,
+      status: item.status,
+      order,
+      tags: item.tags ?? [],
+      createdAt: Date.now(),
+      completedAt: item.status === "done" ? Date.now() : undefined,
+    }
+  }
+
+  return { view: { source: { listId } } }
+}
+
 interface StoreState {
   sheets: Sheet[]
   currentSheetId: string | null
   widgets: Record<string, Widget>
+  lists: Record<string, List>
+  listItems: Record<string, ListItem>
   selectedWidgetIds: string[]
   canvasState: CanvasState
   canvasBackground: CanvasBackground
@@ -68,14 +207,35 @@ interface StoreState {
   copyWidgets: (sheetId: string, widgetIds: string[]) => void
   pasteWidgets: (sheetId: string) => void
 
+  createList: (name: string) => string
+  renameList: (id: string, name: string) => void
+  deleteList: (id: string) => void
+  addListItem: (listId: string, text: string) => string
+  updateListItem: (id: string, updates: Partial<Pick<ListItem, "text" | "tags">>) => void
+  cycleListItemStatus: (id: string) => void
+  deleteListItem: (id: string) => void
+  moveListItem: (id: string, beforeId: string | null, afterId: string | null) => void
+
   undo: () => void
   redo: () => void
 }
 
 const MAX_HISTORY = 50
 
-function trioOf(state: { sheets: Sheet[]; widgets: Record<string, Widget>; currentSheetId: string | null }): HistoryTrio {
-  return { sheets: state.sheets, widgets: state.widgets, currentSheetId: state.currentSheetId }
+function trioOf(state: {
+  sheets: Sheet[]
+  widgets: Record<string, Widget>
+  currentSheetId: string | null
+  lists: Record<string, List>
+  listItems: Record<string, ListItem>
+}): HistoryTrio {
+  return {
+    sheets: state.sheets,
+    widgets: state.widgets,
+    currentSheetId: state.currentSheetId,
+    lists: state.lists,
+    listItems: state.listItems,
+  }
 }
 
 // Pending pre-interaction trio captured by recordSnapshot(). Materialized
@@ -174,6 +334,47 @@ export function migratePersistedState(persisted: unknown, version: number): unkn
       pattern: gridWasDisabled ? "none" : "grid",
     } satisfies CanvasBackground
   }
+  if (version < 7) {
+    // v6 blobs stored todo items inline on the widget (widget.data.items).
+    // Hoist every todo widget's items into normalized lists/listItems
+    // entities; the widget becomes an identity view over its new list.
+    // Old undoStack/redoStack delta entries reference the pre-P1 trio
+    // shape (no lists/listItems) - same precedent as the v3 history swap:
+    // drop them rather than risk feeding undo/redo malformed entries.
+    const widgets = state.widgets as Record<string, Widget> | undefined
+    const lists: Record<string, List> = (state.lists as Record<string, List> | undefined) ?? {}
+    const listItems: Record<string, ListItem> = (state.listItems as Record<string, ListItem> | undefined) ?? {}
+    if (widgets) {
+      for (const widget of Object.values(widgets)) {
+        if (widget.type !== WidgetType.Todo) continue
+        const legacyData = widget.data as { items?: LegacyTodoItem[] } | undefined
+        const listId = crypto.randomUUID()
+        lists[listId] = { id: listId, name: widget.title, createdAt: 0 }
+        let lastOrder: string | null = null
+        for (const item of legacyData?.items ?? []) {
+          const itemId = crypto.randomUUID()
+          const order = orderKeyBetween(lastOrder, null)
+          lastOrder = order
+          const status = legacyItemStatus(item)
+          listItems[itemId] = {
+            id: itemId,
+            listId,
+            text: item.text,
+            status,
+            order,
+            tags: [],
+            createdAt: 0,
+            completedAt: status === "done" ? 0 : undefined,
+          }
+        }
+        widget.data = { view: { source: { listId } } }
+      }
+    }
+    state.lists = lists
+    state.listItems = listItems
+    delete state.undoStack
+    delete state.redoStack
+  }
   return state
 }
 
@@ -226,6 +427,21 @@ function initializeDefaultState() {
   const noteId = crypto.randomUUID()
   const todoId = crypto.randomUUID()
   const quickLinkId = crypto.randomUUID()
+  const listId = crypto.randomUUID()
+
+  const seedTexts = [
+    "Pan the canvas (hold Space + drag)",
+    "Add widgets from the + button",
+    "Create new sheets in the sidebar",
+  ]
+  const listItems: Record<string, ListItem> = {}
+  let lastOrder: string | null = null
+  for (const text of seedTexts) {
+    const itemId = crypto.randomUUID()
+    const order = orderKeyBetween(lastOrder, null)
+    lastOrder = order
+    listItems[itemId] = { id: itemId, listId, text, status: "todo", order, tags: [], createdAt: now }
+  }
 
   useStore.setState({
     sheets: [
@@ -263,13 +479,7 @@ function initializeDefaultState() {
         height: 280,
         zIndex: 2,
         collapsed: false,
-        data: {
-          items: [
-            { id: crypto.randomUUID(), text: "Pan the canvas (hold Space + drag)", status: "todo" as const, done: false },
-            { id: crypto.randomUUID(), text: "Add widgets from the + button", status: "todo" as const, done: false },
-            { id: crypto.randomUUID(), text: "Create new sheets in the sidebar", status: "todo" as const, done: false },
-          ],
-        },
+        data: { view: { source: { listId } } },
       },
       [quickLinkId]: {
         id: quickLinkId,
@@ -284,6 +494,10 @@ function initializeDefaultState() {
         data: {},
       },
     },
+    lists: {
+      [listId]: { id: listId, name: "Getting Started", createdAt: now },
+    },
+    listItems,
   })
 }
 
@@ -353,6 +567,8 @@ export const useStore = create<StoreState>()(
       sheets: [],
       currentSheetId: null,
       widgets: {},
+      lists: {},
+      listItems: {},
       selectedWidgetIds: [],
       canvasState: defaultCanvasState,
       canvasBackground: defaultCanvasBackground,
@@ -379,7 +595,7 @@ export const useStore = create<StoreState>()(
           return {
             sheets,
             currentSheetId,
-            ...pushHistoryEntry(state, prevTrio, { sheets, widgets: state.widgets, currentSheetId }),
+            ...pushHistoryEntry(state, prevTrio, { sheets, widgets: state.widgets, currentSheetId, lists: state.lists, listItems: state.listItems }),
           }
         })
       },
@@ -404,7 +620,7 @@ export const useStore = create<StoreState>()(
             currentSheetId,
             selectedWidgetIds:
               state.currentSheetId === id ? [] : state.selectedWidgetIds,
-            ...pushHistoryEntry(state, prevTrio, { sheets: updatedSheets, widgets: remainingWidgets, currentSheetId }),
+            ...pushHistoryEntry(state, prevTrio, { sheets: updatedSheets, widgets: remainingWidgets, currentSheetId, lists: state.lists, listItems: state.listItems }),
           }
         })
       },
@@ -421,7 +637,7 @@ export const useStore = create<StoreState>()(
           )
           return {
             sheets,
-            ...pushHistoryEntry(state, prevTrio, { sheets, widgets: state.widgets, currentSheetId: state.currentSheetId }),
+            ...pushHistoryEntry(state, prevTrio, { sheets, widgets: state.widgets, currentSheetId: state.currentSheetId, lists: state.lists, listItems: state.listItems }),
           }
         })
       },
@@ -435,15 +651,25 @@ export const useStore = create<StoreState>()(
           const newId = crypto.randomUUID()
           const widgetIdMap = new Map<string, string>()
           const newWidgets: Record<string, Widget> = {}
+          const newLists: Record<string, List> = {}
+          const newListItems: Record<string, ListItem> = {}
           for (const wid of original.widgetOrder) {
             const w = state.widgets[wid]
             if (!w) continue
             const newWid = crypto.randomUUID()
             widgetIdMap.set(wid, newWid)
+            const duplicateTitle = `${w.title} (copy)`
             newWidgets[newWid] = {
               ...w,
               id: newWid,
-              title: `${w.title} (copy)`,
+              title: duplicateTitle,
+              data: forkTodoListForDuplicate(
+                { ...w, id: newWid, title: duplicateTitle },
+                state.lists,
+                state.listItems,
+                newLists,
+                newListItems
+              ),
             }
           }
           const newSheet: Sheet = {
@@ -458,12 +684,16 @@ export const useStore = create<StoreState>()(
           }
           const sheets = [...state.sheets, newSheet]
           const widgets = { ...state.widgets, ...newWidgets }
+          const lists = { ...state.lists, ...newLists }
+          const listItems = { ...state.listItems, ...newListItems }
           return {
             sheets,
             widgets,
+            lists,
+            listItems,
             currentSheetId: newId,
             selectedWidgetIds: [],
-            ...pushHistoryEntry(state, prevTrio, { sheets, widgets, currentSheetId: newId }),
+            ...pushHistoryEntry(state, prevTrio, { sheets, widgets, currentSheetId: newId, lists, listItems }),
           }
         })
       },
@@ -495,7 +725,7 @@ export const useStore = create<StoreState>()(
 
           return {
             sheets: nextSheets,
-            ...pushHistoryEntry(state, prevTrio, { sheets: nextSheets, widgets: state.widgets, currentSheetId: state.currentSheetId }),
+            ...pushHistoryEntry(state, prevTrio, { sheets: nextSheets, widgets: state.widgets, currentSheetId: state.currentSheetId, lists: state.lists, listItems: state.listItems }),
           }
         })
       },
@@ -508,7 +738,7 @@ export const useStore = create<StoreState>()(
           )
           return {
             sheets,
-            ...pushHistoryEntry(state, prevTrio, { sheets, widgets: state.widgets, currentSheetId: state.currentSheetId }),
+            ...pushHistoryEntry(state, prevTrio, { sheets, widgets: state.widgets, currentSheetId: state.currentSheetId, lists: state.lists, listItems: state.listItems }),
           }
         })
       },
@@ -529,7 +759,7 @@ export const useStore = create<StoreState>()(
           return {
             widgets,
             sheets,
-            ...pushHistoryEntry(state, prevTrio, { sheets, widgets, currentSheetId: state.currentSheetId }),
+            ...pushHistoryEntry(state, prevTrio, { sheets, widgets, currentSheetId: state.currentSheetId, lists: state.lists, listItems: state.listItems }),
           }
         })
       },
@@ -545,7 +775,7 @@ export const useStore = create<StoreState>()(
           }
           return {
             widgets,
-            ...pushHistoryEntry(state, prevTrio, { sheets: state.sheets, widgets, currentSheetId: state.currentSheetId }),
+            ...pushHistoryEntry(state, prevTrio, { sheets: state.sheets, widgets, currentSheetId: state.currentSheetId, lists: state.lists, listItems: state.listItems }),
           }
         })
       },
@@ -561,7 +791,7 @@ export const useStore = create<StoreState>()(
           }
           return {
             widgets,
-            ...pushHistoryEntry(state, prevTrio, { sheets: state.sheets, widgets, currentSheetId: state.currentSheetId }),
+            ...pushHistoryEntry(state, prevTrio, { sheets: state.sheets, widgets, currentSheetId: state.currentSheetId, lists: state.lists, listItems: state.listItems }),
           }
         })
       },
@@ -607,7 +837,7 @@ export const useStore = create<StoreState>()(
             selectedWidgetIds: state.selectedWidgetIds.filter(
               (id) => !widgetIds.includes(id)
             ),
-            ...pushHistoryEntry(state, prevTrio, { sheets, widgets: remainingWidgets, currentSheetId: state.currentSheetId }),
+            ...pushHistoryEntry(state, prevTrio, { sheets, widgets: remainingWidgets, currentSheetId: state.currentSheetId, lists: state.lists, listItems: state.listItems }),
           }
         })
       },
@@ -632,7 +862,7 @@ export const useStore = create<StoreState>()(
             selectedWidgetIds: state.selectedWidgetIds.filter(
               (id) => id !== widgetId
             ),
-            ...pushHistoryEntry(state, prevTrio, { sheets, widgets: remainingWidgets, currentSheetId: state.currentSheetId }),
+            ...pushHistoryEntry(state, prevTrio, { sheets, widgets: remainingWidgets, currentSheetId: state.currentSheetId, lists: state.lists, listItems: state.listItems }),
           }
         })
       },
@@ -651,7 +881,7 @@ export const useStore = create<StoreState>()(
           }
           return {
             widgets,
-            ...pushHistoryEntry(state, trioOf(state), { sheets: state.sheets, widgets, currentSheetId: state.currentSheetId }),
+            ...pushHistoryEntry(state, trioOf(state), { sheets: state.sheets, widgets, currentSheetId: state.currentSheetId, lists: state.lists, listItems: state.listItems }),
           }
         })
       },
@@ -670,7 +900,7 @@ export const useStore = create<StoreState>()(
           }
           return {
             widgets,
-            ...pushHistoryEntry(state, trioOf(state), { sheets: state.sheets, widgets, currentSheetId: state.currentSheetId }),
+            ...pushHistoryEntry(state, trioOf(state), { sheets: state.sheets, widgets, currentSheetId: state.currentSheetId, lists: state.lists, listItems: state.listItems }),
           }
         })
       },
@@ -691,7 +921,7 @@ export const useStore = create<StoreState>()(
           }
           return {
             widgets,
-            ...pushHistoryEntry(state, trioOf(state), { sheets: state.sheets, widgets, currentSheetId: state.currentSheetId }),
+            ...pushHistoryEntry(state, trioOf(state), { sheets: state.sheets, widgets, currentSheetId: state.currentSheetId, lists: state.lists, listItems: state.listItems }),
           }
         })
       },
@@ -708,21 +938,27 @@ export const useStore = create<StoreState>()(
           const grid = state.canvasState.gridSize
           const newWidgets: Record<string, Widget> = {}
           const newIds: string[] = []
+          const newLists: Record<string, List> = {}
+          const newListItems: Record<string, ListItem> = {}
           widgetIds.forEach((id, index) => {
             const original = state.widgets[id]
             if (!original) return
+            const duplicateTitle = `${original.title} (copy)`
             const duplicate: Widget = {
               ...original,
               id: crypto.randomUUID(),
               x: original.x + grid + index * grid,
               y: original.y + grid + index * grid,
               zIndex: maxZ + 1 + index,
-              title: `${original.title} (copy)`,
+              title: duplicateTitle,
             }
+            duplicate.data = forkTodoListForDuplicate(duplicate, state.lists, state.listItems, newLists, newListItems)
             newWidgets[duplicate.id] = duplicate
             newIds.push(duplicate.id)
           })
           const widgets = { ...state.widgets, ...newWidgets }
+          const lists = { ...state.lists, ...newLists }
+          const listItems = { ...state.listItems, ...newListItems }
           const sheets = state.sheets.map((s) =>
             s.id === sheetId
               ? {
@@ -735,7 +971,9 @@ export const useStore = create<StoreState>()(
           return {
             widgets,
             sheets,
-            ...pushHistoryEntry(state, prevTrio, { sheets, widgets, currentSheetId: state.currentSheetId }),
+            lists,
+            listItems,
+            ...pushHistoryEntry(state, prevTrio, { sheets, widgets, currentSheetId: state.currentSheetId, lists, listItems }),
           }
         })
       },
@@ -751,6 +989,8 @@ export const useStore = create<StoreState>()(
         )
         const newWidgets: Record<string, Widget> = {}
         const newIds: string[] = []
+        const newLists: Record<string, List> = {}
+        const newListItems: Record<string, ListItem> = {}
         widgetIds.forEach((id, index) => {
           const original = state.widgets[id]
           if (!original) return
@@ -759,10 +999,13 @@ export const useStore = create<StoreState>()(
             id: crypto.randomUUID(),
             zIndex: maxZ + 1 + index,
           }
+          duplicate.data = forkTodoListForDuplicate(duplicate, state.lists, state.listItems, newLists, newListItems)
           newWidgets[duplicate.id] = duplicate
           newIds.push(duplicate.id)
         })
         const widgets = { ...state.widgets, ...newWidgets }
+        const lists = { ...state.lists, ...newLists }
+        const listItems = { ...state.listItems, ...newListItems }
         const sheets = state.sheets.map((s) =>
           s.id === sheetId
             ? {
@@ -775,8 +1018,10 @@ export const useStore = create<StoreState>()(
         set({
           widgets,
           sheets,
+          lists,
+          listItems,
           selectedWidgetIds: newIds,
-          ...pushHistoryEntry(state, prevTrio, { sheets, widgets, currentSheetId: state.currentSheetId }),
+          ...pushHistoryEntry(state, prevTrio, { sheets, widgets, currentSheetId: state.currentSheetId, lists, listItems }),
         })
         return newIds
       },
@@ -793,15 +1038,21 @@ export const useStore = create<StoreState>()(
             0
           )
           const grid = state.canvasState.gridSize
+          const duplicateTitle = `${original.title} (copy)`
           const duplicate: Widget = {
             ...original,
             id: crypto.randomUUID(),
             x: original.x + grid,
             y: original.y + grid,
             zIndex: maxZ + 1,
-            title: `${original.title} (copy)`,
+            title: duplicateTitle,
           }
+          const newLists: Record<string, List> = {}
+          const newListItems: Record<string, ListItem> = {}
+          duplicate.data = forkTodoListForDuplicate(duplicate, state.lists, state.listItems, newLists, newListItems)
           const widgets = { ...state.widgets, [duplicate.id]: duplicate }
+          const lists = { ...state.lists, ...newLists }
+          const listItems = { ...state.listItems, ...newListItems }
           const sheets = state.sheets.map((s) =>
             s.id === sheetId
               ? {
@@ -814,7 +1065,9 @@ export const useStore = create<StoreState>()(
           return {
             widgets,
             sheets,
-            ...pushHistoryEntry(state, prevTrio, { sheets, widgets, currentSheetId: state.currentSheetId }),
+            lists,
+            listItems,
+            ...pushHistoryEntry(state, prevTrio, { sheets, widgets, currentSheetId: state.currentSheetId, lists, listItems }),
           }
         })
       },
@@ -830,7 +1083,7 @@ export const useStore = create<StoreState>()(
           }
           return {
             widgets,
-            ...pushHistoryEntry(state, prevTrio, { sheets: state.sheets, widgets, currentSheetId: state.currentSheetId }),
+            ...pushHistoryEntry(state, prevTrio, { sheets: state.sheets, widgets, currentSheetId: state.currentSheetId, lists: state.lists, listItems: state.listItems }),
           }
         })
       },
@@ -846,7 +1099,7 @@ export const useStore = create<StoreState>()(
           }
           return {
             widgets,
-            ...pushHistoryEntry(state, prevTrio, { sheets: state.sheets, widgets, currentSheetId: state.currentSheetId }),
+            ...pushHistoryEntry(state, prevTrio, { sheets: state.sheets, widgets, currentSheetId: state.currentSheetId, lists: state.lists, listItems: state.listItems }),
           }
         })
       },
@@ -935,7 +1188,7 @@ export const useStore = create<StoreState>()(
             title: w.title,
             width: w.width,
             height: w.height,
-            data: w.data,
+            data: isTodoViewData(w.data) ? snapshotTodoClipboardData(w.data, state.listItems) : w.data,
             collapsed: w.collapsed,
             colorTheme: w.colorTheme,
             x: w.x,
@@ -959,6 +1212,8 @@ export const useStore = create<StoreState>()(
           const grid = state.canvasState.gridSize
           const newWidgets: Record<string, Widget> = {}
           const newIds: string[] = []
+          const newLists: Record<string, List> = {}
+          const newListItems: Record<string, ListItem> = {}
           state.clipboard.widgets.forEach((data, index) => {
             const id = crypto.randomUUID()
             const offset = grid * (1 + index)
@@ -972,12 +1227,14 @@ export const useStore = create<StoreState>()(
               height: data.height,
               zIndex: maxZ + 1 + index,
               collapsed: data.collapsed,
-              data: { ...data.data },
+              data: hoistTodoClipboardData(data.type, data.title, data.data, newLists, newListItems),
               colorTheme: data.colorTheme,
             }
             newIds.push(id)
           })
           const widgets = { ...state.widgets, ...newWidgets }
+          const lists = { ...state.lists, ...newLists }
+          const listItems = { ...state.listItems, ...newListItems }
           const sheets = state.sheets.map((s) =>
             s.id === sheetId
               ? {
@@ -990,22 +1247,156 @@ export const useStore = create<StoreState>()(
           return {
             widgets,
             sheets,
+            lists,
+            listItems,
             selectedWidgetIds: newIds,
-            ...pushHistoryEntry(state, prevTrio, { sheets, widgets, currentSheetId: state.currentSheetId }),
+            ...pushHistoryEntry(state, prevTrio, { sheets, widgets, currentSheetId: state.currentSheetId, lists, listItems }),
+          }
+        })
+      },
+
+      createList: (name) => {
+        const id = crypto.randomUUID()
+        set((state) => {
+          const prevTrio = trioOf(state)
+          const lists = { ...state.lists, [id]: { id, name, createdAt: Date.now() } }
+          return {
+            lists,
+            ...pushHistoryEntry(state, prevTrio, { sheets: state.sheets, widgets: state.widgets, currentSheetId: state.currentSheetId, lists, listItems: state.listItems }),
+          }
+        })
+        return id
+      },
+
+      renameList: (id, name) => {
+        set((state) => {
+          const list = state.lists[id]
+          if (!list) return state
+          const prevTrio = trioOf(state)
+          const lists = { ...state.lists, [id]: { ...list, name } }
+          return {
+            lists,
+            ...pushHistoryEntry(state, prevTrio, { sheets: state.sheets, widgets: state.widgets, currentSheetId: state.currentSheetId, lists, listItems: state.listItems }),
+          }
+        })
+      },
+
+      deleteList: (id) => {
+        set((state) => {
+          if (!state.lists[id]) return state
+          const prevTrio = trioOf(state)
+          const lists = { ...state.lists }
+          delete lists[id]
+          const listItems = { ...state.listItems }
+          for (const itemId of Object.keys(listItems)) {
+            if (listItems[itemId].listId === id) delete listItems[itemId]
+          }
+          return {
+            lists,
+            listItems,
+            ...pushHistoryEntry(state, prevTrio, { sheets: state.sheets, widgets: state.widgets, currentSheetId: state.currentSheetId, lists, listItems }),
+          }
+        })
+      },
+
+      addListItem: (listId, text) => {
+        const id = crypto.randomUUID()
+        set((state) => {
+          const prevTrio = trioOf(state)
+          const itemsInList = Object.values(state.listItems).filter((item) => item.listId === listId)
+          const lastOrder = itemsInList.reduce<string | null>(
+            (max, item) => (max === null || item.order > max ? item.order : max),
+            null
+          )
+          const newItem: ListItem = {
+            id,
+            listId,
+            text,
+            status: "todo",
+            order: orderKeyBetween(lastOrder, null),
+            tags: [],
+            createdAt: Date.now(),
+          }
+          const listItems = { ...state.listItems, [id]: newItem }
+          return {
+            listItems,
+            ...pushHistoryEntry(state, prevTrio, { sheets: state.sheets, widgets: state.widgets, currentSheetId: state.currentSheetId, lists: state.lists, listItems }),
+          }
+        })
+        return id
+      },
+
+      updateListItem: (id, updates) => {
+        set((state) => {
+          const item = state.listItems[id]
+          if (!item) return state
+          const prevTrio = trioOf(state)
+          const listItems = { ...state.listItems, [id]: { ...item, ...updates } }
+          return {
+            listItems,
+            ...pushHistoryEntry(state, prevTrio, { sheets: state.sheets, widgets: state.widgets, currentSheetId: state.currentSheetId, lists: state.lists, listItems }),
+          }
+        })
+      },
+
+      cycleListItemStatus: (id) => {
+        set((state) => {
+          const item = state.listItems[id]
+          if (!item) return state
+          const prevTrio = trioOf(state)
+          const nextStatus = getNextListItemStatus(item.status)
+          const updated: ListItem = {
+            ...item,
+            status: nextStatus,
+            completedAt: nextStatus === "done" ? Date.now() : undefined,
+          }
+          const listItems = { ...state.listItems, [id]: updated }
+          return {
+            listItems,
+            ...pushHistoryEntry(state, prevTrio, { sheets: state.sheets, widgets: state.widgets, currentSheetId: state.currentSheetId, lists: state.lists, listItems }),
+          }
+        })
+      },
+
+      deleteListItem: (id) => {
+        set((state) => {
+          if (!state.listItems[id]) return state
+          const prevTrio = trioOf(state)
+          const listItems = { ...state.listItems }
+          delete listItems[id]
+          return {
+            listItems,
+            ...pushHistoryEntry(state, prevTrio, { sheets: state.sheets, widgets: state.widgets, currentSheetId: state.currentSheetId, lists: state.lists, listItems }),
+          }
+        })
+      },
+
+      moveListItem: (id, beforeId, afterId) => {
+        set((state) => {
+          const item = state.listItems[id]
+          if (!item) return state
+          const prevTrio = trioOf(state)
+          const beforeOrder = beforeId ? state.listItems[beforeId]?.order ?? null : null
+          const afterOrder = afterId ? state.listItems[afterId]?.order ?? null : null
+          const order = orderKeyBetween(beforeOrder, afterOrder)
+          const listItems = { ...state.listItems, [id]: { ...item, order } }
+          return {
+            listItems,
+            ...pushHistoryEntry(state, prevTrio, { sheets: state.sheets, widgets: state.widgets, currentSheetId: state.currentSheetId, lists: state.lists, listItems }),
           }
         })
       },
 
       undo: () => {
         pendingSnapshot = null
-        const { undoStack, redoStack, sheets, widgets, currentSheetId } = get()
+        const { undoStack, redoStack, sheets, widgets, currentSheetId, lists, listItems } = get()
         if (undoStack.length === 0) return
         const entry = undoStack[undoStack.length - 1]
         if (!isValidHistoryEntry(entry)) {
           set({ undoStack: undoStack.slice(0, -1) })
           return
         }
-        const { restored, mirror } = applyHistoryEntry({ sheets, widgets, currentSheetId }, entry)
+        const { restored, mirror } = applyHistoryEntry({ sheets, widgets, currentSheetId, lists, listItems }, entry)
         set({
           ...restored,
           undoStack: undoStack.slice(0, -1),
@@ -1016,14 +1407,14 @@ export const useStore = create<StoreState>()(
 
       redo: () => {
         pendingSnapshot = null
-        const { undoStack, redoStack, sheets, widgets, currentSheetId } = get()
+        const { undoStack, redoStack, sheets, widgets, currentSheetId, lists, listItems } = get()
         if (redoStack.length === 0) return
         const entry = redoStack[redoStack.length - 1]
         if (!isValidHistoryEntry(entry)) {
           set({ redoStack: redoStack.slice(0, -1) })
           return
         }
-        const { restored, mirror } = applyHistoryEntry({ sheets, widgets, currentSheetId }, entry)
+        const { restored, mirror } = applyHistoryEntry({ sheets, widgets, currentSheetId, lists, listItems }, entry)
         set({
           ...restored,
           undoStack: [...undoStack, mirror].slice(-MAX_HISTORY),
@@ -1035,12 +1426,14 @@ export const useStore = create<StoreState>()(
     {
       name: "mind-space-store",
       storage: createJSONStorage(() => debouncedStorage),
-      version: 6,
+      version: 7,
       migrate: migratePersistedState,
       partialize: (state) => ({
         sheets: state.sheets,
         currentSheetId: state.currentSheetId,
         widgets: state.widgets,
+        lists: state.lists,
+        listItems: state.listItems,
         canvasState: state.canvasState,
         canvasBackground: state.canvasBackground,
         resizeHandleStyle: state.resizeHandleStyle,
