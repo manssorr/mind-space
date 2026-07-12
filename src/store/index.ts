@@ -123,10 +123,12 @@ function hoistTodoClipboardData(
   newLists[listId] = { id: listId, name: title, createdAt: Date.now() }
 
   let sourceItems: { text: string; status: ListItemStatus; order?: string; tags?: string[] }[] = []
-  if (data && typeof data === "object" && "items" in data && Array.isArray((data as ClipboardTodoData).items)) {
+  if (data && typeof data === "object" && "view" in data && "items" in data && Array.isArray((data as ClipboardTodoData).items)) {
+    // current-shape clipboard payload: { view, items } (snapshotTodoClipboardData)
     const clipboardData = data as ClipboardTodoData
     sourceItems = clipboardData.items
   } else if (isLegacyTodoData(data)) {
+    // legacy pre-normalization payload: { items: [...] } with done/status inline
     sourceItems = data.items.map((item) => ({ text: item.text, status: legacyItemStatus(item) }))
   }
 

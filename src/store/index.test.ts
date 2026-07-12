@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest"
 import { useStore, migratePersistedState, flushPendingWrites, __resetPendingSnapshotForTests } from "@/store"
-import { WidgetType, type Widget } from "@/types"
+import { WidgetType, type Widget, type List, type ListItem } from "@/types"
 
 function makeWidget(id: string, overrides: Partial<Widget> = {}): Widget {
   return {
@@ -10,6 +10,22 @@ function makeWidget(id: string, overrides: Partial<Widget> = {}): Widget {
   }
 }
 
+function makeTodoWidget(id: string, listId: string, overrides: Partial<Widget> = {}): Widget {
+  return makeWidget(id, {
+    type: WidgetType.Todo,
+    data: { view: { source: { listId } } },
+    ...overrides,
+  })
+}
+
+function makeList(id: string, overrides: Partial<List> = {}): List {
+  return { id, name: "My List", createdAt: 0, ...overrides }
+}
+
+function makeListItem(id: string, listId: string, overrides: Partial<ListItem> = {}): ListItem {
+  return { id, listId, text: "item", status: "todo", order: "m", tags: [], createdAt: 0, ...overrides }
+}
+
 beforeEach(() => {
   localStorage.clear()
   __resetPendingSnapshotForTests()
@@ -17,6 +33,8 @@ beforeEach(() => {
     sheets: [{ id: "s1", title: "Sheet 1", widgetOrder: ["w1"], createdAt: 0, updatedAt: 0 }],
     currentSheetId: "s1",
     widgets: { w1: makeWidget("w1") },
+    lists: {},
+    listItems: {},
     selectedWidgetIds: [],
     undoStack: [],
     redoStack: [],
@@ -536,4 +554,369 @@ describe("setSheetBackground", () => {
     useStore.getState().setSheetBackground("s1", { color: "ocean" })
     expect(useStore.getState().undoStack).toEqual([])
   })
+})
+
+describe("createList", () => {
+  it("creates a list, returns its id, and pushes one undo entry", () => {
+    const id = useStore.getState().createList("Groceries")
+    const state = useStore.getState()
+    expect(state.lists[id]).toBeDefined()
+    expect(state.lists[id].name).toBe("Groceries")
+    expect(state.undoStack).toHaveLength(1)
+  })
+})
+
+describe("renameList", () => {
+  it("renames a list and pushes one undo entry", () => {
+    useStore.setState({ lists: { l1: makeList("l1", { name: "old" }) } })
+    useStore.getState().renameList("l1", "new")
+    expect(useStore.getState().lists.l1.name).toBe("new")
+    expect(useStore.getState().undoStack).toHaveLength(1)
+  })
+
+  it("is a no-op for an unknown id", () => {
+    useStore.getState().renameList("does-not-exist", "new")
+    expect(useStore.getState().undoStack).toHaveLength(0)
+  })
+})
+
+describe("deleteList", () => {
+  it("deletes a list and cascades its items", () => {
+    useStore.setState({
+      lists: { l1: makeList("l1") },
+      listItems: { i1: makeListItem("i1", "l1"), i2: makeListItem("i2", "l1") },
+    })
+    useStore.getState().deleteList("l1")
+    const state = useStore.getState()
+    expect(state.lists.l1).toBeUndefined()
+    expect(state.listItems.i1).toBeUndefined()
+    expect(state.listItems.i2).toBeUndefined()
+  })
+
+  it("does not delete items belonging to other lists", () => {
+    useStore.setState({
+      lists: { l1: makeList("l1"), l2: makeList("l2") },
+      listItems: { i1: makeListItem("i1", "l1"), i2: makeListItem("i2", "l2") },
+    })
+    useStore.getState().deleteList("l1")
+    expect(useStore.getState().listItems.i2).toBeDefined()
+  })
+
+  it("undo restores the list and its items", () => {
+    useStore.setState({
+      lists: { l1: makeList("l1") },
+      listItems: { i1: makeListItem("i1", "l1") },
+    })
+    useStore.getState().deleteList("l1")
+    useStore.getState().undo()
+    const state = useStore.getState()
+    expect(state.lists.l1).toBeDefined()
+    expect(state.listItems.i1).toBeDefined()
+  })
+})
+
+describe("addListItem", () => {
+  it("appends an item with status todo and an order after the current last", () => {
+    useStore.setState({ lists: { l1: makeList("l1") } })
+    const id = useStore.getState().addListItem("l1", "buy milk")
+    const state = useStore.getState()
+    expect(state.listItems[id].text).toBe("buy milk")
+    expect(state.listItems[id].status).toBe("todo")
+    expect(state.listItems[id].listId).toBe("l1")
+    expect(state.undoStack).toHaveLength(1)
+  })
+
+  it("orders a second item after the first", () => {
+    useStore.setState({ lists: { l1: makeList("l1") } })
+    const id1 = useStore.getState().addListItem("l1", "first")
+    const id2 = useStore.getState().addListItem("l1", "second")
+    const state = useStore.getState()
+    expect(state.listItems[id1].order < state.listItems[id2].order).toBe(true)
+  })
+})
+
+describe("updateListItem", () => {
+  it("merges text/tags updates and pushes one undo entry", () => {
+    useStore.setState({ listItems: { i1: makeListItem("i1", "l1", { text: "old" }) } })
+    useStore.getState().updateListItem("i1", { text: "new" })
+    expect(useStore.getState().listItems.i1.text).toBe("new")
+    expect(useStore.getState().undoStack).toHaveLength(1)
+  })
+
+  it("is a no-op for an unknown id", () => {
+    useStore.getState().updateListItem("does-not-exist", { text: "x" })
+    expect(useStore.getState().undoStack).toHaveLength(0)
+  })
+})
+
+describe("cycleListItemStatus", () => {
+  it("cycles todo -> progress -> done -> todo, matching getNextTodoStatus", () => {
+    useStore.setState({ listItems: { i1: makeListItem("i1", "l1", { status: "todo" }) } })
+
+    useStore.getState().cycleListItemStatus("i1")
+    expect(useStore.getState().listItems.i1.status).toBe("progress")
+
+    useStore.getState().cycleListItemStatus("i1")
+    expect(useStore.getState().listItems.i1.status).toBe("done")
+
+    useStore.getState().cycleListItemStatus("i1")
+    expect(useStore.getState().listItems.i1.status).toBe("todo")
+  })
+
+  it("sets completedAt when entering done and clears it when leaving done", () => {
+    useStore.setState({ listItems: { i1: makeListItem("i1", "l1", { status: "progress" }) } })
+
+    useStore.getState().cycleListItemStatus("i1")
+    expect(useStore.getState().listItems.i1.status).toBe("done")
+    expect(useStore.getState().listItems.i1.completedAt).toBeDefined()
+
+    useStore.getState().cycleListItemStatus("i1")
+    expect(useStore.getState().listItems.i1.status).toBe("todo")
+    expect(useStore.getState().listItems.i1.completedAt).toBeUndefined()
+  })
+
+  it("each cycle is one undo entry; undo restores the previous status", () => {
+    useStore.setState({ listItems: { i1: makeListItem("i1", "l1", { status: "todo" }) } })
+    useStore.getState().cycleListItemStatus("i1")
+    expect(useStore.getState().undoStack).toHaveLength(1)
+    useStore.getState().undo()
+    expect(useStore.getState().listItems.i1.status).toBe("todo")
+  })
+})
+
+describe("deleteListItem", () => {
+  it("removes the item and pushes one undo entry", () => {
+    useStore.setState({ listItems: { i1: makeListItem("i1", "l1") } })
+    useStore.getState().deleteListItem("i1")
+    expect(useStore.getState().listItems.i1).toBeUndefined()
+    expect(useStore.getState().undoStack).toHaveLength(1)
+  })
+
+  it("undo restores the deleted item", () => {
+    useStore.setState({ listItems: { i1: makeListItem("i1", "l1", { text: "keep me" }) } })
+    useStore.getState().deleteListItem("i1")
+    useStore.getState().undo()
+    expect(useStore.getState().listItems.i1.text).toBe("keep me")
+  })
+})
+
+describe("moveListItem", () => {
+  it("rewrites the order key for one item between two others", () => {
+    useStore.setState({
+      listItems: {
+        i1: makeListItem("i1", "l1", { order: "a" }),
+        i2: makeListItem("i2", "l1", { order: "b" }),
+        i3: makeListItem("i3", "l1", { order: "c" }),
+      },
+    })
+    useStore.getState().moveListItem("i3", "i1", "i2")
+    const state = useStore.getState()
+    expect(state.listItems.i3.order > state.listItems.i1.order).toBe(true)
+    expect(state.listItems.i3.order < state.listItems.i2.order).toBe(true)
+  })
+
+  it("only touches the moved item's entry (one-item undo entry)", () => {
+    useStore.setState({
+      listItems: {
+        i1: makeListItem("i1", "l1", { order: "a" }),
+        i2: makeListItem("i2", "l1", { order: "b" }),
+      },
+    })
+    useStore.getState().moveListItem("i2", null, "i1")
+    const entry = useStore.getState().undoStack[0]
+    expect(Object.keys(entry.listItemsBefore)).toEqual(["i2"])
+  })
+})
+
+describe("deleteWidget leaves lists and items intact", () => {
+  it("deleting a todo widget does not touch its backing list or items", () => {
+    useStore.setState({
+      sheets: [{ id: "s1", title: "Sheet 1", widgetOrder: ["w1", "todo1"], createdAt: 0, updatedAt: 0 }],
+      widgets: { w1: makeWidget("w1"), todo1: makeTodoWidget("todo1", "l1") },
+      lists: { l1: makeList("l1") },
+      listItems: { i1: makeListItem("i1", "l1") },
+    })
+    useStore.getState().deleteWidget("s1", "todo1")
+    const state = useStore.getState()
+    expect(state.widgets.todo1).toBeUndefined()
+    expect(state.lists.l1).toBeDefined()
+    expect(state.listItems.i1).toBeDefined()
+  })
+})
+
+describe("duplicateWidget forks a todo widget's list", () => {
+  it("creates a new list + copied items, independent of the source", () => {
+    useStore.setState({
+      sheets: [{ id: "s1", title: "Sheet 1", widgetOrder: ["todo1"], createdAt: 0, updatedAt: 0 }],
+      widgets: { todo1: makeTodoWidget("todo1", "l1", { title: "My List" }) },
+      lists: { l1: makeList("l1", { name: "My List" }) },
+      listItems: { i1: makeListItem("i1", "l1", { text: "shared?", order: "a" }) },
+    })
+    useStore.getState().duplicateWidget("s1", "todo1")
+    const state = useStore.getState()
+    const newWidgetId = state.sheets[0].widgetOrder.find((id) => id !== "todo1")!
+    const newWidget = state.widgets[newWidgetId]
+    const newListId = (newWidget.data as { view: { source: { listId: string } } }).view.source.listId
+
+    expect(newListId).not.toBe("l1")
+    expect(state.lists[newListId]).toBeDefined()
+
+    const newItems = Object.values(state.listItems).filter((i) => i.listId === newListId)
+    expect(newItems).toHaveLength(1)
+    expect(newItems[0].text).toBe("shared?")
+    expect(newItems[0].id).not.toBe("i1")
+
+    // editing the copy must not affect the original
+    useStore.getState().updateListItem(newItems[0].id, { text: "edited copy" })
+    expect(useStore.getState().listItems.i1.text).toBe("shared?")
+  })
+})
+
+describe("duplicateWidgetsAt (cmd+D) forks a todo widget's list", () => {
+  it("clone points at a fresh list, original list untouched", () => {
+    useStore.setState({
+      sheets: [{ id: "s1", title: "Sheet 1", widgetOrder: ["todo1"], createdAt: 0, updatedAt: 0 }],
+      widgets: { todo1: makeTodoWidget("todo1", "l1", { title: "My List" }) },
+      lists: { l1: makeList("l1", { name: "My List" }) },
+      listItems: { i1: makeListItem("i1", "l1") },
+    })
+    const [cloneId] = useStore.getState().duplicateWidgetsAt("s1", ["todo1"])
+    const state = useStore.getState()
+    const cloneListId = (state.widgets[cloneId].data as { view: { source: { listId: string } } }).view.source.listId
+    expect(cloneListId).not.toBe("l1")
+    expect(Object.values(state.listItems).filter((i) => i.listId === cloneListId)).toHaveLength(1)
+  })
+})
+
+describe("copyWidgets / pasteWidgets forks a todo widget's list", () => {
+  it("paste creates an independent list + items snapshot from the source", () => {
+    useStore.setState({
+      widgets: { w1: makeTodoWidget("w1", "l1", { title: "My List" }) },
+      lists: { l1: makeList("l1", { name: "My List" }) },
+      listItems: {
+        i1: makeListItem("i1", "l1", { text: "one", order: "a", status: "done", tags: ["x"] }),
+        i2: makeListItem("i2", "l1", { text: "two", order: "b" }),
+      },
+    })
+    useStore.getState().copyWidgets("s1", ["w1"])
+    useStore.getState().pasteWidgets("s1")
+    const state = useStore.getState()
+    const pastedId = state.selectedWidgetIds[0]
+    const pastedListId = (state.widgets[pastedId].data as { view: { source: { listId: string } } }).view.source.listId
+
+    expect(pastedListId).not.toBe("l1")
+    const pastedItems = Object.values(state.listItems)
+      .filter((i) => i.listId === pastedListId)
+      .sort((a, b) => (a.order < b.order ? -1 : 1))
+    expect(pastedItems.map((i) => i.text)).toEqual(["one", "two"])
+    expect(pastedItems[0].status).toBe("done")
+    expect(pastedItems[0].tags).toEqual(["x"])
+
+    // original list untouched
+    expect(Object.values(state.listItems).filter((i) => i.listId === "l1")).toHaveLength(2)
+  })
+
+  it("pastes cleanly from a legacy clipboard entry carrying data.items", () => {
+    useStore.setState({
+      clipboard: {
+        widgets: [
+          {
+            type: WidgetType.Todo,
+            title: "Old Todo",
+            width: 280,
+            height: 240,
+            collapsed: false,
+            x: 0,
+            y: 0,
+            data: {
+              items: [
+                { id: "legacy-1", text: "legacy item", done: true },
+                { id: "legacy-2", text: "still open", status: "progress" },
+              ],
+            },
+          },
+        ],
+        minX: 0,
+        minY: 0,
+      },
+    })
+    useStore.getState().pasteWidgets("s1")
+    const state = useStore.getState()
+    const pastedId = state.selectedWidgetIds[0]
+    const pastedListId = (state.widgets[pastedId].data as { view: { source: { listId: string } } }).view.source.listId
+    expect(state.lists[pastedListId]).toBeDefined()
+    const pastedItems = Object.values(state.listItems).filter((i) => i.listId === pastedListId)
+    expect(pastedItems).toHaveLength(2)
+    expect(pastedItems.find((i) => i.text === "legacy item")?.status).toBe("done")
+    expect(pastedItems.find((i) => i.text === "still open")?.status).toBe("progress")
+  })
+})
+
+describe("migratePersistedState v6 -> v7 (todo items -> lists/listItems)", () => {
+  it("hoists items covering all three statuses plus a legacy done:true item, preserves order, clears history stacks", () => {
+    const persisted = {
+      widgets: {
+        todoA: makeTodoWidgetLegacy("todoA", "First List", [
+          { id: "a1", text: "still todo", status: "todo" },
+          { id: "a2", text: "in progress", status: "progress" },
+          { id: "a3", text: "already done", status: "done" },
+          { id: "a4", text: "legacy done flag", done: true },
+        ]),
+        todoB: makeTodoWidgetLegacy("todoB", "Empty List", []),
+        note1: makeWidget("note1", { type: WidgetType.Note, data: { content: "hello" } }),
+      },
+      undoStack: [{ bogus: "pre-p1 shape" }],
+      redoStack: [{ bogus: "pre-p1 shape" }],
+    }
+
+    const migrated = migratePersistedState(persisted, 6) as {
+      widgets: Record<string, Widget>
+      lists: Record<string, List>
+      listItems: Record<string, ListItem>
+      undoStack?: unknown
+      redoStack?: unknown
+    }
+
+    // non-todo widget untouched
+    expect(migrated.widgets.note1.data).toEqual({ content: "hello" })
+
+    // stacks cleared
+    expect(migrated.undoStack).toBeUndefined()
+    expect(migrated.redoStack).toBeUndefined()
+
+    // todoA hoisted to a list named after the widget title
+    const listAId = (migrated.widgets.todoA.data as { view: { source: { listId: string } } }).view.source.listId
+    expect(migrated.lists[listAId].name).toBe("First List")
+
+    const itemsA = Object.values(migrated.listItems)
+      .filter((i) => i.listId === listAId)
+      .sort((a, b) => (a.order < b.order ? -1 : 1))
+    expect(itemsA.map((i) => i.text)).toEqual(["still todo", "in progress", "already done", "legacy done flag"])
+    expect(itemsA.map((i) => i.status)).toEqual(["todo", "progress", "done", "done"])
+    expect(itemsA[2].completedAt).toBeDefined()
+    expect(itemsA[3].completedAt).toBeDefined()
+    expect(itemsA[0].completedAt).toBeUndefined()
+    expect(itemsA[1].completedAt).toBeUndefined()
+    // order strictly increasing (sorted matches insertion order)
+    for (let i = 1; i < itemsA.length; i++) {
+      expect(itemsA[i].order > itemsA[i - 1].order).toBe(true)
+    }
+    // tags always [] from migration
+    for (const item of itemsA) {
+      expect(item.tags).toEqual([])
+    }
+
+    // todoB hoisted to an empty list
+    const listBId = (migrated.widgets.todoB.data as { view: { source: { listId: string } } }).view.source.listId
+    expect(migrated.lists[listBId].name).toBe("Empty List")
+    expect(Object.values(migrated.listItems).filter((i) => i.listId === listBId)).toHaveLength(0)
+  })
+
+  function makeTodoWidgetLegacy(
+    id: string,
+    title: string,
+    items: { id: string; text: string; done?: boolean; status?: string }[]
+  ): Widget {
+    return makeWidget(id, { type: WidgetType.Todo, title, data: { items } })
+  }
 })
