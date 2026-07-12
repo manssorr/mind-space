@@ -141,7 +141,7 @@ export const TodoWidget = memo(function TodoWidget({ widgetId }: { widgetId: str
         )}
         <button
           onClick={startAdding}
-          className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
           title="Add todo"
           aria-label="Add todo"
         >
@@ -157,7 +157,7 @@ export const TodoWidget = memo(function TodoWidget({ widgetId }: { widgetId: str
             <div
               key={item.id}
               className={cn(
-                "flex items-start gap-2 rounded-md px-2 py-1.5 group transition-colors",
+                "flex items-start gap-2 rounded-md px-2 py-1.5 group/item transition-colors",
                 status === "done"
                   ? "bg-primary/5"
                   : status === "progress"
@@ -225,7 +225,7 @@ export const TodoWidget = memo(function TodoWidget({ widgetId }: { widgetId: str
 
               <button
                 onClick={() => deleteTodo(item.id)}
-                className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-destructive hover:text-destructive-foreground transition-all"
+                className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 group-hover/item:opacity-100 hover:bg-destructive hover:text-destructive-foreground transition-all"
                 title="Delete todo"
                 aria-label="Delete todo"
               >

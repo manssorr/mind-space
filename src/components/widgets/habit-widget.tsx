@@ -253,7 +253,7 @@ export const HabitWidget = memo(function HabitWidget({ widgetId }: { widgetId: s
               e.stopPropagation()
               prevMonth()
             }}
-            className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+            className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
             aria-label="Previous month"
           >
             <ChevronLeft className="h-3.5 w-3.5" />
@@ -266,7 +266,7 @@ export const HabitWidget = memo(function HabitWidget({ widgetId }: { widgetId: s
               e.stopPropagation()
               nextMonth()
             }}
-            className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+            className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
             aria-label="Next month"
           >
             <ChevronRight className="h-3.5 w-3.5" />

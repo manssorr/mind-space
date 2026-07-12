@@ -78,7 +78,7 @@ export const QuickLinkWidget = memo(function QuickLinkWidget({ widgetId }: { wid
           </IconButton>
         </div>
       ) : (
-        <div className="relative flex-1 flex group">
+        <div className="relative flex-1 flex group/link">
           <button
             onClick={handleOpen}
             className="flex flex-col items-center justify-center flex-1 gap-3 rounded-lg hover:bg-accent/50 transition-colors"
@@ -99,10 +99,16 @@ export const QuickLinkWidget = memo(function QuickLinkWidget({ widgetId }: { wid
               </div>
             )}
             <div className="text-center">
-              <p className="text-xs font-medium truncate max-w-full">
+              <p
+                className="text-xs font-medium truncate max-w-full"
+                title={url ? new URL(normalizeUrl(url)).hostname.replace("www.", "") : undefined}
+              >
                 {url ? new URL(normalizeUrl(url)).hostname.replace("www.", "") : "No URL set"}
               </p>
-              <p className="text-[10px] text-muted-foreground truncate max-w-full">
+              <p
+                className="text-[10px] text-muted-foreground truncate max-w-full"
+                title={url || undefined}
+              >
                 {url || "Click edit to add URL"}
               </p>
             </div>
@@ -112,7 +118,7 @@ export const QuickLinkWidget = memo(function QuickLinkWidget({ widgetId }: { wid
             label="Edit URL"
             onClick={handleStartEdit}
             size="sm"
-            className="absolute top-0 right-0 opacity-0 group-hover:opacity-100"
+            className="absolute top-0 right-0 opacity-0 group-hover/link:opacity-100 transition-opacity"
           >
             <Edit3 className="h-3.5 w-3.5" />
           </IconButton>

@@ -128,11 +128,12 @@ export const TimerWidget = memo(function TimerWidget({ widgetId }: { widgetId: s
       ) : (
         <div
           className={cn(
-            "text-4xl font-mono font-bold tabular-nums tracking-tight cursor-pointer",
+            "text-4xl font-mono font-bold tabular-nums tracking-tight",
+            ((!running && !paused) || isComplete) && "cursor-pointer",
             isComplete && "text-destructive animate-pulse"
           )}
           onClick={(!running && !paused) || isComplete ? handleStartEdit : undefined}
-          title="Click to set duration"
+          title={(!running && !paused) || isComplete ? "Click to set duration" : undefined}
         >
           {String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}
           <span className="text-xl text-muted-foreground">.{tenths}</span>
