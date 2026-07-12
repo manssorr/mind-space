@@ -23,7 +23,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
         aria-label={label}
         title={label}
         className={cn(
-          "flex items-center justify-center rounded-md transition-colors shrink-0",
+          "flex items-center justify-center rounded-md transition-[color,background-color,transform] duration-150 ease-out active:scale-[0.97] shrink-0",
           size === "sm" ? "h-6 w-6" : size === "md" ? "h-8 w-8" : "h-7 w-7",
           active
             ? "bg-foreground/10 text-foreground"
@@ -54,7 +54,7 @@ export const RoundButton = forwardRef<HTMLButtonElement, RoundButtonProps>(
         aria-label={label}
         title={label}
         className={cn(
-          "flex size-8 items-center justify-center rounded-full transition-colors",
+          "flex size-8 items-center justify-center rounded-full transition-[color,background-color,transform] duration-150 ease-out active:scale-[0.97]",
           variant === "primary"
             ? "bg-primary text-primary-foreground hover:bg-primary/90"
             : variant === "destructive"

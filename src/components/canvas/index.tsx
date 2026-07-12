@@ -47,6 +47,7 @@ export function Canvas() {
   const currentSheetId = useStore((s) => s.currentSheetId)
   const widgetOrder = useStore((s) => s.sheets.find((sh) => sh.id === s.currentSheetId)?.widgetOrder)
   const canvasState = useStore((s) => s.canvasState)
+  const canvasAnimating = useStore((s) => s.canvasAnimating)
 
   useKeyboardShortcuts()
   const { onPointerDown, onPointerMove, onPointerUp, onPointerCancel } = useCanvasGestures(containerRef)
@@ -90,6 +91,7 @@ export function Canvas() {
           transform: `translate(${canvasState.offsetX}px, ${canvasState.offsetY}px) scale(${canvasState.scale})`,
           transformOrigin: "0 0",
           willChange: "transform",
+          transition: canvasAnimating ? "transform 200ms var(--ease-in-out)" : "none",
         }}
       >
         {widgetOrder?.map((id) => (

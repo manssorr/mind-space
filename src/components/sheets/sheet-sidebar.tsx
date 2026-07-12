@@ -204,6 +204,7 @@ const SheetTabItem = memo(function SheetTabItem({
                 className={cn(
                   "min-w-44 rounded-lg border bg-popover p-1 shadow-md",
                   menuPlacement === "top" ? "origin-bottom-right" : "origin-top-right",
+                  menuStyle && "menu-enter",
                 )}
                 style={menuStyle ?? { visibility: "hidden" }}
                 onClick={(e) => e.stopPropagation()}
