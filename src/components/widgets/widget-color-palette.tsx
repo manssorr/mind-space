@@ -31,10 +31,12 @@ export const WidgetColorPalette = memo(function WidgetColorPalette({
       <div className={cn("grid gap-1 p-1", compact ? "grid-cols-6" : "grid-cols-6")}>
         <button
           className={cn(
-            "h-5 w-5 rounded-full border-2 transition-all",
+            "h-5 w-5 cursor-pointer rounded-full border-2 transition-all",
+            "hover:scale-110 hover:ring-2 hover:ring-primary hover:ring-offset-1 hover:ring-offset-background",
+            "focus-visible:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-background",
             (!currentId || currentId === "default")
               ? "border-ring ring-1 ring-ring"
-              : "border-border hover:border-muted-foreground"
+              : "border-border"
           )}
           style={getSwatchStyle("default", isDark)}
           onClick={() => onSelect("default")}
@@ -45,10 +47,12 @@ export const WidgetColorPalette = memo(function WidgetColorPalette({
           <button
             key={t.id}
             className={cn(
-              "h-5 w-5 rounded-full border-2 transition-all",
+              "h-5 w-5 cursor-pointer rounded-full border-2 transition-all",
+              "hover:scale-110 hover:ring-2 hover:ring-primary hover:ring-offset-1 hover:ring-offset-background",
+              "focus-visible:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-background",
               currentId === t.id
                 ? "border-ring ring-1 ring-ring"
-                : "border-border hover:border-muted-foreground"
+                : "border-border"
             )}
             style={getSwatchStyle(t.id, isDark)}
             onClick={() => onSelect(t.id)}
