@@ -37,6 +37,25 @@ export interface Widget {
   colorTheme?: string
 }
 
+export interface List {
+  id: string
+  name: string
+  createdAt: number
+}
+
+export type ListItemStatus = "todo" | "progress" | "done"
+
+export interface ListItem {
+  id: string
+  listId: string
+  text: string
+  status: ListItemStatus
+  order: string
+  tags: string[]
+  createdAt: number
+  completedAt?: number
+}
+
 export type BackgroundPattern = "grid" | "dots" | "none"
 
 export type ResizeHandleStyle = "corners" | "invisible" | "brackets"
