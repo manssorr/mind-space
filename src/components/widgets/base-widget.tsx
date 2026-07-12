@@ -129,7 +129,7 @@ export const BaseWidget = memo(function BaseWidget({
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
       >
-        {isSelected && <SelectionOutline widgetId={widgetId} />}
+        {isSelected && <SelectionOutline widgetId={widgetId} collapsed={widget.collapsed} />}
 
         <div
           {...dragHandlers}
