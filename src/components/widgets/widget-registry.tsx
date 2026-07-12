@@ -1,13 +1,14 @@
 import { WidgetType } from "@/types"
 import type { ComponentType } from "react"
 import type { LucideIcon } from "lucide-react"
-import { StickyNote, Type, Timer, Clock, Link, Calendar, CheckSquare, ListTodo, Calculator } from "lucide-react"
+import { StickyNote, Type, Timer, Clock, Link, Calendar, CheckSquare, ListTodo, LayoutList, Calculator } from "lucide-react"
 import { TimerWidget } from "./timer-widget"
 import { StopwatchWidget } from "./stopwatch-widget"
 import { QuickLinkWidget } from "./quick-link-widget"
 import { CalendarWidget } from "./calendar-widget"
 import { HabitWidget } from "./habit-widget"
 import { TodoWidget } from "./todo-widget"
+import { TodoHubWidget } from "./todo-hub-widget"
 import { CounterWidget } from "./counter-widget"
 import { NoteWidget } from "./note-widget"
 import { TextWidget } from "./text-widget"
@@ -103,6 +104,15 @@ export const WIDGET_DEFS: Record<WidgetType, WidgetDef> = {
     defaultTitle: "Counter",
     defaultSize: { width: 280, height: 240 },
     defaultData: {},
+  },
+  [WidgetType.TodoHub]: {
+    type: WidgetType.TodoHub,
+    label: "All Todos",
+    icon: LayoutList,
+    component: TodoHubWidget,
+    defaultTitle: "All Todos",
+    defaultSize: { width: 320, height: 420 },
+    defaultData: { view: { source: { all: true } } },
   },
 }
 

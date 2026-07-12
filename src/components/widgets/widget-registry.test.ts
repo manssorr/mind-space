@@ -7,8 +7,8 @@ describe("WIDGET_DEFS", () => {
     expect(Object.values(WidgetType).every((t) => WIDGET_DEFS[t] !== undefined)).toBe(true)
   })
 
-  it("has exactly 9 widget types", () => {
-    expect(Object.values(WidgetType).length).toBe(9)
+  it("has exactly 10 widget types", () => {
+    expect(Object.values(WidgetType).length).toBe(10)
   })
 
   it("every def has a non-empty label, defaultTitle, a component, and a positive defaultSize", () => {
