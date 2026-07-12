@@ -225,7 +225,7 @@ export const TodoWidget = memo(function TodoWidget({ widgetId }: { widgetId: str
 
               <button
                 onClick={() => deleteTodo(item.id)}
-                className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-destructive hover:text-destructive-foreground transition-all"
+                className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-destructive hover:text-destructive-foreground transition-[opacity,background-color,color]"
                 title="Delete todo"
                 aria-label="Delete todo"
               >
@@ -259,7 +259,7 @@ export const TodoWidget = memo(function TodoWidget({ widgetId }: { widgetId: str
           />
           <button
             onClick={handleAddTodo}
-            className="h-6 shrink-0 rounded bg-primary px-2 text-[10px] font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+            className="h-6 shrink-0 rounded bg-primary px-2 text-[10px] font-medium text-primary-foreground hover:bg-primary/90 transition-[color,background-color,transform] duration-150 ease-out active:scale-[0.97]"
           >
             Add
           </button>

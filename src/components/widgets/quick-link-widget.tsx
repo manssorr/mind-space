@@ -3,27 +3,12 @@
 import { memo, useCallback, useMemo, useRef, useState } from "react"
 import { useStore } from "@/store"
 import { getWidgetData } from "@/lib/widget-utils"
+import { getFaviconUrl, normalizeUrl, safeHostname } from "@/lib/quick-link-utils"
 import { IconButton, InlineInput } from "@/components/ui/icon-button"
 import { ExternalLink, Edit3, Check, X } from "lucide-react"
 
 interface QuickLinkData {
   url: string
-}
-
-function getFaviconUrl(url: string): string {
-  try {
-    const parsed = new URL(url.startsWith("http") ? url : `https://${url}`)
-    return `https://www.google.com/s2/favicons?domain=${parsed.hostname}&sz=32`
-  } catch {
-    return ""
-  }
-}
-
-function normalizeUrl(url: string): string {
-  if (!url.startsWith("http://") && !url.startsWith("https://")) {
-    return `https://${url}`
-  }
-  return url
 }
 
 export const QuickLinkWidget = memo(function QuickLinkWidget({ widgetId }: { widgetId: string }) {
@@ -37,7 +22,7 @@ export const QuickLinkWidget = memo(function QuickLinkWidget({ widgetId }: { wid
   const url = data.url ?? ""
 
   const handleOpen = useCallback(() => {
-    if (url) window.open(normalizeUrl(url), "_blank", "noopener,noreferrer")
+    if (url && safeHostname(url)) window.open(normalizeUrl(url), "_blank", "noopener,noreferrer")
   }, [url])
 
   const handleStartEdit = useCallback((e: React.MouseEvent) => {
@@ -54,6 +39,7 @@ export const QuickLinkWidget = memo(function QuickLinkWidget({ widgetId }: { wid
   }, [urlInput, updateWidget, widgetId])
 
   const favicon = useMemo(() => url ? getFaviconUrl(url) : "", [url])
+  const hostname = url ? safeHostname(url) : null
 
   return (
     <div className="flex h-full flex-col p-4">
@@ -100,7 +86,7 @@ export const QuickLinkWidget = memo(function QuickLinkWidget({ widgetId }: { wid
             )}
             <div className="text-center">
               <p className="text-xs font-medium truncate max-w-full">
-                {url ? new URL(normalizeUrl(url)).hostname.replace("www.", "") : "No URL set"}
+                {hostname ?? (url ? "Invalid URL" : "No URL set")}
               </p>
               <p className="text-[10px] text-muted-foreground truncate max-w-full">
                 {url || "Click edit to add URL"}
