@@ -39,6 +39,8 @@ export interface Widget {
 
 export type BackgroundPattern = "grid" | "dots" | "none"
 
+export type ResizeHandleStyle = "corners" | "invisible" | "brackets"
+
 export interface CanvasBackground {
   color: string
   pattern: BackgroundPattern

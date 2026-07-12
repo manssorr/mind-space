@@ -1,6 +1,6 @@
 import { create } from "zustand"
 import { persist, createJSONStorage } from "zustand/middleware"
-import { WidgetType, type Sheet, type Widget, type CanvasState, type ThemeSettings, type CanvasBackground } from "@/types"
+import { WidgetType, type Sheet, type Widget, type CanvasState, type ThemeSettings, type CanvasBackground, type ResizeHandleStyle } from "@/types"
 import { diffForHistory, applyHistoryEntry, isValidHistoryEntry, type HistoryEntry, type HistoryTrio } from "@/lib/history-diff"
 import { quantize } from "@/lib/geometry"
 
@@ -20,6 +20,7 @@ interface StoreState {
   selectedWidgetIds: string[]
   canvasState: CanvasState
   canvasBackground: CanvasBackground
+  resizeHandleStyle: ResizeHandleStyle
   themeSettings: ThemeSettings
   undoStack: HistoryEntry[]
   redoStack: HistoryEntry[]
@@ -60,6 +61,7 @@ interface StoreState {
 
   setCanvasBackground: (background: Partial<CanvasBackground>) => void
   setSheetBackground: (sheetId: string, background: Partial<CanvasBackground> | null) => void
+  setResizeHandleStyle: (style: ResizeHandleStyle) => void
 
   setThemeSettings: (settings: Partial<ThemeSettings>) => void
 
@@ -210,6 +212,8 @@ const defaultCanvasBackground: CanvasBackground = {
   pattern: "grid",
 }
 
+const defaultResizeHandleStyle: ResizeHandleStyle = "corners"
+
 const defaultThemeSettings: ThemeSettings = {
   mode: "system",
   accentColor: "zinc",
@@ -352,6 +356,7 @@ export const useStore = create<StoreState>()(
       selectedWidgetIds: [],
       canvasState: defaultCanvasState,
       canvasBackground: defaultCanvasBackground,
+      resizeHandleStyle: defaultResizeHandleStyle,
       themeSettings: defaultThemeSettings,
       undoStack: [],
       redoStack: [],
@@ -906,6 +911,10 @@ export const useStore = create<StoreState>()(
         }))
       },
 
+      setResizeHandleStyle: (style) => {
+        set({ resizeHandleStyle: style })
+      },
+
       setThemeSettings: (settings) => {
         set((prev) => ({
           themeSettings: { ...prev.themeSettings, ...settings },
@@ -1034,6 +1043,7 @@ export const useStore = create<StoreState>()(
         widgets: state.widgets,
         canvasState: state.canvasState,
         canvasBackground: state.canvasBackground,
+        resizeHandleStyle: state.resizeHandleStyle,
         themeSettings: state.themeSettings,
         clipboard: state.clipboard,
         undoStack: state.undoStack,

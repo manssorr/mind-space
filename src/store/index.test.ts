@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest"
-import { useStore, migratePersistedState, __resetPendingSnapshotForTests } from "@/store"
+import { useStore, migratePersistedState, flushPendingWrites, __resetPendingSnapshotForTests } from "@/store"
 import { WidgetType, type Widget } from "@/types"
 
 function makeWidget(id: string, overrides: Partial<Widget> = {}): Widget {
@@ -459,6 +459,50 @@ describe("setCanvasBackground", () => {
 
     useStore.getState().setCanvasBackground({ color: "ocean" })
     expect(useStore.getState().canvasBackground).toEqual({ color: "ocean", pattern: "dots" })
+  })
+})
+
+describe("setResizeHandleStyle", () => {
+  it("defaults to corners", () => {
+    expect(useStore.getState().resizeHandleStyle).toBe("corners")
+  })
+
+  it("updates resizeHandleStyle", () => {
+    useStore.getState().setResizeHandleStyle("brackets")
+    expect(useStore.getState().resizeHandleStyle).toBe("brackets")
+
+    useStore.getState().setResizeHandleStyle("invisible")
+    expect(useStore.getState().resizeHandleStyle).toBe("invisible")
+  })
+
+  it("persists across a rehydrate cycle", async () => {
+    useStore.getState().setResizeHandleStyle("brackets")
+    flushPendingWrites()
+    await useStore.persist.rehydrate()
+    expect(useStore.getState().resizeHandleStyle).toBe("brackets")
+  })
+})
+
+describe("resizeHandleStyle rehydrate fallback", () => {
+  it("an old persisted blob missing resizeHandleStyle rehydrates without errors, defaulting to corners", async () => {
+    // Simulate a pre-030 payload written before this field existed: other
+    // top-level keys present, resizeHandleStyle absent. On a real page
+    // load the store creator seeds resizeHandleStyle to "corners" before
+    // persist.rehydrate() ever runs, and zustand's default merge
+    // (`{...currentState, ...persisted}`) leaves keys the persisted blob
+    // doesn't mention untouched - so no migration entry is needed. Model
+    // that exact ordering: reset in-memory to the creator default first,
+    // then rehydrate from a blob lacking the key.
+    useStore.getState().setResizeHandleStyle("invisible")
+    flushPendingWrites()
+    const raw = JSON.parse(localStorage.getItem("mind-space-store")!)
+    delete raw.state.resizeHandleStyle
+    localStorage.setItem("mind-space-store", JSON.stringify(raw))
+    expect(raw.state.resizeHandleStyle).toBeUndefined()
+
+    useStore.setState({ resizeHandleStyle: "corners" })
+    await expect(useStore.persist.rehydrate()).resolves.not.toThrow()
+    expect(useStore.getState().resizeHandleStyle).toBe("corners")
   })
 })
 
