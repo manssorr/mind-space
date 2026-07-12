@@ -145,9 +145,14 @@ main plan's drift check first, then:
 
 ### Step R0: gates baseline
 
-`npm install`, then `npm test` (expect 163 baseline + 7 `list-placement` + 2
-store hub tests, all green - record exact count), `npm run typecheck` (clean).
-Lint: the only allowed pre-existing error is `theme-toggle.tsx`
+KNOWN TRAP (verified 2026-07-12): bare `npm test` also picks up full repo
+copies under `.claude/worktrees/` (vitest positional filters are substrings;
+config only excludes node_modules + e2e) and reports ~10k tests with ~75
+unrelated failures. First fix the config - in `vitest.config.ts` add
+`"**/.claude/**"` to `test.exclude` - then run `npm test`. Verified-good
+baseline on this branch: **172 passed (172)** = 163 baseline + 7
+`list-placement` + 2 store hub tests. `npm run typecheck` clean (verified
+2026-07-12). Lint: the only allowed pre-existing error is `theme-toggle.tsx`
 (react-hooks/set-state-in-effect). Any other failure = STOP.
 
 ### Step R1 (MED): replace hand-rolled place-on-canvas with a thin store action
