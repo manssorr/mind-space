@@ -615,6 +615,28 @@ describe("deleteList", () => {
   })
 })
 
+describe("addWidget bound to an existing list (hub's place-on-canvas)", () => {
+  it("creates a todo widget whose source points at the given listId, one undo entry", () => {
+    useStore.setState({ lists: { l1: makeList("l1", { name: "Groceries" }) } })
+    useStore.getState().addWidget("s1", makeTodoWidget("w2", "l1", { title: "Groceries" }))
+    const state = useStore.getState()
+    expect(state.widgets.w2.data).toEqual({ view: { source: { listId: "l1" } } })
+    expect(state.sheets[0].widgetOrder).toContain("w2")
+    expect(state.undoStack).toHaveLength(1)
+  })
+
+  it("does not create a second list - the existing list stays the sole owner of its items", () => {
+    useStore.setState({
+      lists: { l1: makeList("l1") },
+      listItems: { i1: makeListItem("i1", "l1") },
+    })
+    useStore.getState().addWidget("s1", makeTodoWidget("w2", "l1"))
+    const state = useStore.getState()
+    expect(Object.keys(state.lists)).toEqual(["l1"])
+    expect(state.listItems.i1.listId).toBe("l1")
+  })
+})
+
 describe("addListItem", () => {
   it("appends an item with status todo and an order after the current last", () => {
     useStore.setState({ lists: { l1: makeList("l1") } })
