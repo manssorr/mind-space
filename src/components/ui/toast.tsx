@@ -4,6 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useRef,
   useState,
   type ReactNode,
 } from "react"
@@ -16,11 +17,12 @@ interface Toast {
   title: string
   description?: string
   variant?: "default" | "destructive" | "success"
+  open: boolean
 }
 
 interface ToastContextValue {
   toasts: Toast[]
-  addToast: (toast: Omit<Toast, "id">) => void
+  addToast: (toast: Omit<Toast, "id" | "open">) => void
   removeToast: (id: string) => void
 }
 
@@ -34,33 +36,40 @@ export function useToast() {
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
+  const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
 
-  const addToast = useCallback((toast: Omit<Toast, "id">) => {
-    const id = crypto.randomUUID()
-    setToasts((prev) => [...prev, { ...toast, id }])
+  const dismissToast = useCallback((id: string) => {
+    const t = timers.current.get(id)
+    if (t) clearTimeout(t)
+    timers.current.delete(id)
+    setToasts((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, open: false } : t))
+    )
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id))
-    }, 4000)
+    }, 300)
   }, [])
 
-  const removeToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id))
-  }, [])
+  const addToast = useCallback((toast: Omit<Toast, "id" | "open">) => {
+    const id = crypto.randomUUID()
+    setToasts((prev) => [...prev, { ...toast, id, open: true }])
+    timers.current.set(id, setTimeout(() => dismissToast(id), 4000))
+  }, [dismissToast])
 
   return (
-    <ToastContext.Provider value={{ toasts, addToast, removeToast }}>
+    <ToastContext.Provider value={{ toasts, addToast, removeToast: dismissToast }}>
       <ToastPrimitive.Provider swipeDirection="right">
         {children}
         <ToastPrimitive.Viewport className="fixed bottom-4 right-4 z-[100] flex max-w-[420px] flex-col gap-2 outline-none" />
         {toasts.map((toast) => (
           <ToastPrimitive.Root
             key={toast.id}
-            open
+            open={toast.open}
             onOpenChange={(open) => {
-              if (!open) removeToast(toast.id)
+              if (!open) dismissToast(toast.id)
             }}
             className={cn(
-              "group pointer-events-auto relative flex w-full items-center justify-between gap-3 overflow-hidden rounded-lg border p-4 shadow-lg transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[state=closed]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-right-full",
+              "group pointer-events-auto relative flex w-full items-center justify-between gap-3 overflow-hidden rounded-lg border p-4 shadow-lg transition-transform duration-200 data-[swipe=move]:transition-none data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right-full data-[state=open]:animate-in data-[state=open]:slide-in-from-right-full data-[swipe=end]:animate-out data-[swipe=end]:slide-out-to-right-full",
               toast.variant === "destructive"
                 ? "border-destructive/50 bg-destructive text-destructive-foreground"
                 : toast.variant === "success"

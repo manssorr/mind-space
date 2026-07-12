@@ -61,6 +61,11 @@
   --chart-3: 197 37% 24%;
   --chart-4: 43 74% 66%;
   --chart-5: 27 87% 67%;
+
+  /* Motion tokens. Intentionally override Tailwind's default --ease-out /
+     --ease-in-out theme vars with stronger curves. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
 }
 
 .dark {
@@ -99,82 +104,105 @@ body {
   color: hsl(var(--foreground));
 }
 
-@keyframes toast-slide-in {
-  from {
-    transform: translateX(100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
-}
-
-@keyframes toast-slide-out {
-  from {
-    transform: translateX(0);
-    opacity: 1;
-  }
-  to {
-    transform: translateX(100%);
-    opacity: 0;
-  }
-}
-
 @keyframes fade-in {
   from { opacity: 0; }
-  to { opacity: 1; }
 }
-
 @keyframes fade-out {
-  from { opacity: 1; }
   to { opacity: 0; }
 }
-
 @keyframes zoom-in {
   from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
 }
-
 @keyframes zoom-out {
-  from { opacity: 1; transform: scale(1); }
   to { opacity: 0; transform: scale(0.95); }
 }
-
 @keyframes slide-in-from-right {
-  from { transform: translateX(100%); }
-  to { transform: translateX(0); }
+  from { transform: translateX(100%); opacity: 0; }
 }
-
 @keyframes slide-out-to-right {
-  from { transform: translateX(0); }
-  to { transform: translateX(100%); }
+  to { transform: translateX(100%); opacity: 0; }
 }
-
 @keyframes widget-enter {
   from { opacity: 0; transform: scale(0.95) translateY(-4px); }
-  to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 .widget-enter {
-  animation: widget-enter 200ms ease-out both;
+  animation: widget-enter 200ms var(--ease-out) both;
 }
 
-.animate-in {
+@keyframes menu-in {
+  from { opacity: 0; transform: scale(0.96); }
+}
+
+.menu-enter {
+  animation: menu-in 150ms var(--ease-out) both;
+}
+
+.widget-collapse-anim {
+  transition: height 200ms var(--ease-out);
+}
+
+@keyframes widget-exit {
+  to { opacity: 0; transform: scale(0.95); }
+}
+.widget-exit {
+  animation: widget-exit 150ms var(--ease-out) both;
+  pointer-events: none;
+}
+
+@keyframes habit-pop {
+  0% { transform: scale(1); }
+  35% { transform: scale(0.92); }
+  70% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+.habit-pop {
+  animation: habit-pop 350ms var(--ease-in-out);
+}
+
+@utility animate-in {
+  animation-duration: 200ms;
+  animation-timing-function: var(--ease-out);
+  animation-fill-mode: both;
+}
+@utility animate-out {
   animation-duration: 150ms;
-  animation-timing-function: ease-out;
-  animation-fill-mode: forwards;
+  animation-timing-function: var(--ease-out); /* exits also start fast */
+  animation-fill-mode: both;
 }
+@utility fade-in-0 { animation-name: fade-in; }
+@utility fade-out-0 { animation-name: fade-out; }
+@utility zoom-in-95 { animation-name: zoom-in; }
+@utility zoom-out-95 { animation-name: zoom-out; }
+@utility slide-in-from-right-full { animation-name: slide-in-from-right; }
+@utility slide-out-to-right-full { animation-name: slide-out-to-right; }
 
-.animate-out {
-  animation-duration: 150ms;
-  animation-timing-function: ease-in;
-  animation-fill-mode: forwards;
+@media (prefers-reduced-motion: reduce) {
+  @keyframes zoom-in {
+    from { opacity: 0; }
+  }
+  @keyframes zoom-out {
+    to { opacity: 0; }
+  }
+  @keyframes slide-in-from-right {
+    from { opacity: 0; }
+  }
+  @keyframes slide-out-to-right {
+    to { opacity: 0; }
+  }
+  @keyframes widget-enter {
+    from { opacity: 0; }
+  }
+  @keyframes menu-in {
+    from { opacity: 0; }
+  }
+  @keyframes widget-exit {
+    to { opacity: 0; }
+  }
+  .habit-pop {
+    animation: none;
+  }
+  .widget-collapse-anim {
+    transition-duration: 1ms;
+  }
 }
-
-.animate-in.fade-in-0 { animation-name: fade-in; }
-.animate-out.fade-out-0 { animation-name: fade-out; }
-.animate-in.zoom-in-95 { animation-name: zoom-in; }
-.animate-out.zoom-out-95 { animation-name: zoom-out; }
-.animate-in.slide-in-from-right-full { animation-name: slide-in-from-right; }
-.animate-out.slide-out-to-right-full { animation-name: slide-out-to-right; }
