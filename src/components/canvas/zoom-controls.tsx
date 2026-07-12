@@ -31,6 +31,8 @@ export const ZoomControls = memo(function ZoomControls() {
   const setCanvasState = useStore((s) => s.setCanvasState)
   const canvasBackground = useStore((s) => s.canvasBackground)
   const setCanvasBackground = useStore((s) => s.setCanvasBackground)
+  const resizeHandleStyle = useStore((s) => s.resizeHandleStyle)
+  const setResizeHandleStyle = useStore((s) => s.setResizeHandleStyle)
 
   const zoomPercent = Math.round(canvasState.scale * 100)
 
@@ -121,6 +123,8 @@ export const ZoomControls = memo(function ZoomControls() {
       <BackgroundPicker
         value={canvasBackground}
         onChange={setCanvasBackground}
+        resizeHandleStyle={resizeHandleStyle}
+        onResizeHandleStyleChange={setResizeHandleStyle}
         trigger={
           <IconButton label="Canvas background" size="md">
             <Paintbrush className="h-4 w-4" />

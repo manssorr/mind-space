@@ -1,10 +1,10 @@
 "use client"
 
 import * as Popover from "@radix-ui/react-popover"
-import { Check, Grid3x3, Circle, Ban } from "lucide-react"
+import { Check, Grid3x3, Circle, Ban, Square, EyeOff, CornerUpLeft } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { BACKGROUND_PRESETS } from "@/lib/backgrounds"
-import type { BackgroundPattern, CanvasBackground } from "@/types"
+import type { BackgroundPattern, CanvasBackground, ResizeHandleStyle } from "@/types"
 import { useTheme } from "@/components/theme-provider"
 
 const PATTERNS: { id: BackgroundPattern; label: string; icon: typeof Grid3x3 }[] = [
@@ -13,10 +13,18 @@ const PATTERNS: { id: BackgroundPattern; label: string; icon: typeof Grid3x3 }[]
   { id: "none", label: "None", icon: Ban },
 ]
 
+const HANDLE_STYLES: { id: ResizeHandleStyle; label: string; icon: typeof Square }[] = [
+  { id: "corners", label: "Corners", icon: Square },
+  { id: "invisible", label: "Invisible", icon: EyeOff },
+  { id: "brackets", label: "Brackets", icon: CornerUpLeft },
+]
+
 interface BackgroundPickerProps {
   value: CanvasBackground
   onChange: (partial: Partial<CanvasBackground>) => void
   onReset?: () => void
+  resizeHandleStyle?: ResizeHandleStyle
+  onResizeHandleStyleChange?: (style: ResizeHandleStyle) => void
   trigger: React.ReactNode
   side?: "top" | "right" | "bottom" | "left"
   align?: "start" | "center" | "end"
@@ -26,6 +34,8 @@ export function BackgroundPicker({
   value,
   onChange,
   onReset,
+  resizeHandleStyle,
+  onResizeHandleStyleChange,
   trigger,
   side = "top",
   align = "end",
@@ -97,6 +107,34 @@ export function BackgroundPicker({
               )
             })}
           </div>
+
+          {resizeHandleStyle && onResizeHandleStyleChange && (
+            <>
+              <div className="text-xs font-medium text-muted-foreground mt-3 mb-2">Resize handles</div>
+              <div className="flex gap-1 rounded-md bg-muted p-0.5">
+                {HANDLE_STYLES.map((handle) => {
+                  const Icon = handle.icon
+                  const isSelected = resizeHandleStyle === handle.id
+                  return (
+                    <button
+                      key={handle.id}
+                      type="button"
+                      onClick={() => onResizeHandleStyleChange(handle.id)}
+                      className={cn(
+                        "flex flex-1 items-center justify-center gap-1 rounded-sm py-1 text-xs transition-colors",
+                        isSelected
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      <Icon className="size-3.5" />
+                      {handle.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </>
+          )}
 
           {onReset && (
             <button
