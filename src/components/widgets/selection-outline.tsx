@@ -139,9 +139,11 @@ export const SelectionOutline = memo(function SelectionOutline({ widgetId, colla
         style={{ outline: "none" }}
       />
 
-      {edgeZones.map(({ dir, className, style }) => (
-        <ResizeZone key={dir} widgetId={widgetId} dir={dir} className={className} style={style} />
-      ))}
+      {edgeZones
+        .filter(({ dir }) => !collapsed || dir === "e" || dir === "w")
+        .map(({ dir, className, style }) => (
+          <ResizeZone key={dir} widgetId={widgetId} dir={dir} className={className} style={style} />
+        ))}
 
       {!collapsed &&
         cornerZones.map(({ dir, className, style }) => (
